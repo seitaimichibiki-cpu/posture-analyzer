@@ -1,0 +1,13 @@
+# 一時ファイル
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+
+# アップロード画像（個人情報保護のため除外）
+static/uploads/*
+!static/uploads/.gitkeep
+
+# 仮想環境
+venv/
+.env

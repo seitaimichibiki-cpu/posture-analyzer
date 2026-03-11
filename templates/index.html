@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>整体院 導 ｜ AI 姿勢解析システム</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>AI 姿勢解析システム</h1>
+            <p class="subtitle">MediaPipe 高精度姿勢推定エンジン</p>
+        </header>
+
+        <main>
+            <section class="upload-section">
+                <div class="view-selector">
+                    <button id="btnFront" class="view-btn active" onclick="setView('front')">正面解析</button>
+                    <button id="btnSide" class="view-btn" onclick="setView('side')">側面解析</button>
+                </div>
+
+                <div class="card photo-card">
+                    <div id="previewArea" class="preview-area">
+                        <div class="default-msg">
+                            <span class="icon">📸</span>
+                            <p>解析する写真を撮影または選択してください</p>
+                        </div>
+                        <img id="imagePreview" src="" alt="Preview" style="display: none;">
+                    </div>
+                    
+                    <div class="actions">
+                        <input type="file" id="fileInput" accept="image/*" capture="camera" style="display: none;">
+                        <button class="primary-btn" onclick="document.getElementById('fileInput').click()">📸 撮影・写真を選択</button>
+                        <button id="btnAnalyze" class="analyze-btn" disabled onclick="startAnalysis()">🚀 解析を実行</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading Overlay -->
+            <div id="loadingOverlay" class="overlay" style="display: none;">
+                <div class="loader-content">
+                    <div class="spinner"></div>
+                    <p>AI解析中...<br><span>（約5〜10秒ほどかかります）</span></p>
+                </div>
+            </div>
+
+            <!-- Result Section -->
+            <section id="resultSection" class="result-section" style="display: none;">
+                <div class="card result-card">
+                    <h2>解析レポート</h2>
+                    <div class="report-wrapper">
+                        <img id="resultImage" src="" alt="Analysis Report">
+                    </div>
+                    <div class="result-actions">
+                        <a id="downloadBtn" href="" download class="secondary-btn">💾 画像を保存</a>
+                        <button class="text-btn" onclick="reset()">✨ 別の解析をする</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let currentView = 'front';
+        let selectedFile = null;
+
+        function setView(view) {
+            currentView = view;
+            document.getElementById('btnFront').classList.toggle('active', view === 'front');
+            document.getElementById('btnSide').classList.toggle('active', view === 'side');
+        }
+
+        document.getElementById('fileInput').onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                const reader = new FileReader();
+                reader.onload = (re) => {
+                    document.getElementById('imagePreview').src = re.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                    document.querySelector('.default-msg').style.display = 'none';
+                    document.getElementById('btnAnalyze').disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        async function startAnalysis() {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+            formData.append('view_type', currentView);
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
+                    document.getElementById('downloadBtn').href = data.report_url;
+                    document.getElementById('resultSection').style.display = 'block';
+                    document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('エラー: ' + data.error);
+                }
+            } catch (err) {
+                alert('通信エラーが発生しました');
+                console.error(err);
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        function reset() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.querySelector('.default-msg').style.display = 'flex';
+            document.getElementById('btnAnalyze').disabled = true;
+            document.getElementById('resultSection').style.display = 'none';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>

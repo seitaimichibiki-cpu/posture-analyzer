@@ -1,0 +1,7 @@
+Flask==3.0.0
+flask-cors==4.0.0
+mediapipe==0.10.9
+opencv-python-headless
+numpy
+Pillow
+gunicorn
