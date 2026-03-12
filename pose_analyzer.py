@@ -118,6 +118,123 @@ class PoseAnalyzer:
         gc.collect()
         return res
 
+    def analyze_comparison(self, img_path1, img_path2, output_path, view_type='auto'):
+        """2枚の画像を比較解析する"""
+        import gc
+        img1_orig, img2_orig = cv2.imread(img_path1), cv2.imread(img_path2)
+        if img1_orig is None or img2_orig is None: return False
+
+        # 解析用リサイズ
+        def prep(im):
+            h, w = im.shape[:2]; th = 600; tw = int(w * (th/h))
+            return cv2.resize(im, (tw, th), interpolation=cv2.INTER_CUBIC)
+        i1, i2 = prep(img1_orig), prep(img2_orig)
+
+        # 姿勢検出
+        def detect(im):
+            mpi = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
+            res = self.detector.detect(mpi)
+            return mpi, res
+        mpi1, res1 = detect(i1); mpi2, res2 = detect(i2)
+
+        if not res1.pose_landmarks or not res2.pose_landmarks:
+            print("  [SKIP] 比較対象の人物が検出されませんでした")
+            return False
+
+        lm1, lm2 = res1.pose_landmarks[0], res2.pose_landmarks[0]
+        view = view_type if view_type != 'auto' else self._detect_view(lm2)
+
+        # 個別解析と描画済みイメージの取得
+        if view == 'front':
+            res_img1, items1, risks1 = self._process_front_for_comp(i1, lm1)
+            res_img2, items2, risks2 = self._process_front_for_comp(i2, lm2)
+            panel = build_comparison_panel(items1, items2, risks2, 560, 1400, "正面")
+        else:
+            res_img1, items1, risks1 = self._process_side_for_comp(i1, lm1)
+            res_img2, items2, risks2 = self._process_side_for_comp(i2, lm2)
+            panel = build_comparison_panel(items1, items2, risks2, 560, 1400, "側面")
+
+        # レポート合成 [Before][After][Panel]
+        success = self._save_comparison_report(res_img1, res_img2, panel, output_path, f"比較（{view}）")
+
+        del mpi1, res1, mpi2, res2, i1, i2, img1_orig, img2_orig
+        gc.collect()
+        return success
+
+    def _process_front_for_comp(self, img, lm):
+        """比較用の正面描画（内部処理）"""
+        h, w = img.shape[:2]
+        head_a = calc_angle(lm[7], lm[8], w, h); shldr_a = calc_angle(lm[11], lm[12], w, h); pelvis_a = calc_angle(lm[23], lm[24], w, h)
+        sc_h, sc_s, sc_p = get_score("頭部", abs(head_a)), get_score("肩", abs(shldr_a)), get_score("骨盤", abs(pelvis_a))
+        
+        f_mx = (lm[27].x+lm[28].x)/2; p_w = max(abs(lm[23].x-lm[24].x), 1e-6)
+        e_s, s_s, p_s = (lm[7].x+lm[8].x)/2-f_mx, (lm[11].x+lm[12].x)/2-f_mx, (lm[23].x+lm[24].x)/2-f_mx
+        e_pct, s_pct, p_pct = e_s/p_w*100, s_s/p_w*100, p_s/p_w*100
+        ts_sc = get_trunk_score(max(abs(e_pct), abs(s_pct), abs(p_pct))/100)
+
+        x1, y1, x2, y2 = self._get_crop_box(lm, w, h); img_c = img[y1:y2, x1:x2]
+        target_ph = 1400; scale = target_ph / img_c.shape[0]
+        img_f = cv2.resize(img_c, (int(img_c.shape[1]*scale), target_ph), interpolation=cv2.INTER_CUBIC)
+        
+        draw_skeleton_zoom(img_f, lm, w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_f, lm[11], lm[12], sc_s, w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_f, lm[23], lm[24], sc_p, w, h, x1, y1, scale)
+        draw_midline_zoom(img_f, lm, w, h, x1, y1, scale)
+
+        items = [
+            {"n":"頭部傾き","v":head_a,"s":sc_h}, {"n":"肩傾き","v":shldr_a,"s":sc_s}, {"n":"骨盤傾き","v":pelvis_a,"s":sc_p},
+            {"n":"頭部ズレ","v":e_pct,"s":ts_sc}, {"n":"肩部ズレ","v":s_pct,"s":ts_sc}, {"n":"骨盤ズレ","v":p_pct,"s":ts_sc}
+        ]
+        risks = calc_body_risks(sc_h, sc_s, sc_p, ts_sc, shldr_a, pelvis_a)
+        return img_f, items, risks
+
+    def _process_side_for_comp(self, img, lm):
+        """比較用の側面描画（内部処理）"""
+        h, w = img.shape[:2]; mx, ex = (lm[9].x+lm[10].x)/2, (lm[7].x+lm[8].x)/2
+        fr = mx > ex; ie = 7 if abs(lm[7].x-lm[0].x)>abs(lm[8].x-lm[0].x) else 8
+        idx = [ie, 12, 24, 26, 28] if ie==8 else [ie, 11, 23, 25, 27]
+        ear, shldr, hip, knee, ankle = [lm[i] for i in idx]; ref = max(abs(shldr.y-hip.y)*h, 1)
+        xo = int(ref*0.04)*(1 if not fr else -1); yo = int(ref*0.07)
+        ear_px_o = (int(ear.x*w+xo), int(ear.y*h+yo))
+        f_p, r_p = (ear_px_o[0]/w-shldr.x)*w/ref*100*(1 if fr else -1), (shldr.x-hip.x)*w/ref*100*(1 if fr else -1)
+        p_a = math.degrees(math.atan2((knee.x-hip.x)*w, (knee.y-hip.y)*h))*(1 if fr else -1)
+        t_p = (ear_px_o[0]/w-ankle.x)*w/ref*100*(1 if fr else -1)
+        f_s, r_s, p_s, t_s = [_get_side_score(k, abs(v)/(100 if "p" in k else 1)) for k,v in zip(["FHP","ラウンドショルダー","骨盤前後傾","体幹ライン"],[f_p,r_p,p_a,t_p])]
+
+        x1, y1, x2, y2 = self._get_crop_box(lm, w, h); img_c = img[y1:y2, x1:x2]
+        target_ph = 1400; scale = target_ph / img_c.shape[0]; img_f = cv2.resize(img_c, (int(img_c.shape[1]*scale), target_ph), interpolation=cv2.INTER_CUBIC)
+        
+        draw_skeleton_zoom(img_f, lm, w, h, x1, y1, scale)
+        ax = px_zoom(ankle,w,h,x1,y1,scale); ex_p = (int((ear_px_o[0]-x1)*scale), int((ear_px_o[1]-y1)*scale))
+        sx = px_zoom(shldr,w,h,x1,y1,scale); hx = px_zoom(hip,w,h,x1,y1,scale)
+        for yy in range(max(ex_p[1]-50,20), ax[1], 25): cv2.line(img_f, (ax[0],yy), (ax[0],min(yy+12,ax[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
+        pts = [ex_p, sx, hx, ax]
+        for i in range(len(pts)-1): cv2.line(img_f, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
+        for p in pts: cv2.circle(img_f, p, 7, (200,200,50), -1)
+
+        items = [{"n":"FHP","v":f_p,"s":f_s}, {"n":"ラウンド肩","v":r_p,"s":r_s}, {"n":"骨盤前後傾","v":p_a,"s":p_s}, {"n":"体幹領域","v":t_p,"s":t_s}]
+        risks = calc_side_risks(f_s,r_s,t_s,p_s,abs(f_p),abs(r_p))
+        return img_f, items, risks
+
+    def _save_comparison_report(self, img1, img2, panel, output_path, title):
+        # [Before][After][Panel]
+        # img1, img2 の横幅を揃える（アスペクト比維持のため最大幅に合わせる必要はないが、レイアウトとして整える）
+        canvas = np.hstack([img1, img2, panel])
+        bar_h = 60; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
+        full_p = Image.new("RGB", (fw, fh), (28, 34, 58)); draw = ImageDraw.Draw(full_p)
+        draw_text_center(draw, fw//2, 10, f"整体院 導 ｜ AI 姿勢比較レポート（{title}）", get_font(34), WHITE)
+        
+        # Before/After のラベル
+        w1 = img1.shape[1]; w2 = img2.shape[1]
+        draw.rectangle([(0, bar_h), (w1, bar_h+40)], fill=(40,50,90))
+        draw_text_center(draw, w1//2, bar_h+8, "【 BEFORE 】", get_font(24), YELLOW)
+        draw.rectangle([(w1, bar_h), (w1+w2, bar_h+40)], fill=(50,70,120))
+        draw_text_center(draw, w1 + w2//2, bar_h+8, "【 AFTER 】", get_font(24), (80,255,150))
+        
+        full_p.paste(cv2pil(canvas), (0, bar_h))
+        cv2.imwrite(output_path, pil2cv2(np.array(full_p)))
+        return True
+
     def _detect_view(self, lm):
         shldr_dx = abs(lm[11].x - lm[12].x)
         nose_to_leye = abs(lm[0].x - lm[2].x)
@@ -483,6 +600,40 @@ def build_side_panel(items, risks, pw, ih):
         y += 24
     y += 10; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), "▌ 評価基準の出典", get_font(13), WHITE); y += 18
     for r in ["・ Kendall et al. (2005)", "・ Magee DJ. (2014)","・ Griegel-Morris P. (1992)", "・ 日本リハ会 姿勢評価GL"]: draw_text(dr, (18,y), r, fXXS, GRAY); y += 15
+    return pil2cv2(np.array(p))
+
+def build_comparison_panel(it1, it2, risks, pw, ih, mode):
+    p = Image.new("RGB", (pw, ih), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(14), get_font(13)
+    dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, f"🩺 姿勢変化・改善指標（{mode}）", fT, WHITE)
+    y = 65; draw_text(dr, (18,y), "▌ 姿勢データの変化", fH, WHITE); y += 38
+    
+    for i, (b, a) in enumerate(zip(it1, it2)):
+        dr.rectangle([(10,y),(pw-10,y+78)], fill=(34,40,68), outline=LINE_COL); draw_text(dr, (18,y+8), b["n"], fB, WHITE)
+        # スコア変化
+        def draw_sc(xx, yy, sc, label):
+            col = SCORE_RGB[sc]; dr.ellipse([(xx,yy),(xx+18,yy+18)], fill=col); draw_text(dr, (xx+3,yy+1), sc, fXXS, (10,10,10)); draw_text(dr, (xx+25,yy+2), label, fXXS, GRAY)
+        draw_sc(pw-140, y+8, b["s"], "前"); draw_sc(pw-60, y+8, a["s"], "後")
+        
+        # 数値比較
+        unit = "°" if "傾き" in b["n"] or "傾" in b["n"] else "%"
+        draw_text(dr, (18,y+42), f"Before: {abs(b['v']):.1f}{unit}", fS, GRAY); draw_text(dr, (160,y+42), f"After: {abs(a['v']):.1f}{unit}", fS, YELLOW)
+        
+        # 改善度（矢印）
+        diff = abs(b["v"]) - abs(a["v"]); col_diff = (80,255,150) if diff > 0.1 else (255,100,80) if diff < -0.1 else GRAY
+        txt_diff = f"改善: {diff:+.1f}{unit}" if diff > 0.1 else f"変化: {diff:+.1f}{unit}"
+        draw_text(dr, (pw-140, y+42), txt_diff, fS, col_diff)
+        y += 88
+
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 専門スタッフの視点", fH, WHITE); y += 22; draw_text(dr, (18,y), "最新の解析データに基づいたリスク評価です", fXXS, GRAY); y += 20
+    for pt, sc, msg in risks:
+        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
+        rem = msg; wrp = []
+        while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
+        if rem: wrp.append(rem)
+        for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
+        y += 40
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15
+    draw_text(dr, (pw//2-120, y), "整体院 導 ｜ 技術提携：AI 姿勢解析エンジン", fXXS, GRAY)
     return pil2cv2(np.array(p))
 
 if __name__ == "__main__":

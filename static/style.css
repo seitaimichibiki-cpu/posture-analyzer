@@ -175,6 +175,45 @@ button {
     transform: translateY(-2px);
 }
 
+.actions-footer {
+    position: sticky;
+    bottom: 20px;
+    z-index: 100;
+    margin-top: 20px;
+}
+
+/* Comparison Mode Layout */
+.comparison-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.comp-card {
+    padding: 12px !important;
+}
+
+.comp-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preview-area.small {
+    min-height: 140px;
+    margin-bottom: 0;
+    border-style: solid;
+    background: #060912;
+}
+
+.preview-area.small .icon {
+    font-size: 24px;
+}
+
 /* Loading Overlay */
 .overlay {
     position: fixed;

@@ -21,9 +21,10 @@
                 <div class="view-selector">
                     <button id="btnFront" class="view-btn active" onclick="setView('front')">正面解析</button>
                     <button id="btnSide" class="view-btn" onclick="setView('side')">側面解析</button>
+                    <button id="btnCompare" class="view-btn" onclick="setView('compare')">比較（B/A）</button>
                 </div>
 
-                <div class="card photo-card">
+                <div id="singleModeArea" class="card photo-card">
                     <div id="previewArea" class="preview-area">
                         <div class="default-msg">
                             <span class="icon">📸</span>
@@ -33,16 +34,37 @@
                     </div>
                     
                     <div class="actions">
-                        <!-- ボタンごとに異なる入力を使い分ける -->
                         <input type="file" id="fileInputCamera" accept="image/*" capture="camera" style="display: none;">
                         <input type="file" id="fileInputLibrary" accept="image/*" style="display: none;">
-                        
                         <div class="input-group">
                             <button class="primary-btn flex-1" onclick="document.getElementById('fileInputCamera').click()">📸 写真を撮る</button>
                             <button class="primary-btn flex-1" onclick="document.getElementById('fileInputLibrary').click()">📁 フォルダから選択</button>
                         </div>
-                        <button id="btnAnalyze" class="analyze-btn" disabled onclick="startAnalysis()">🚀 解析を実行</button>
                     </div>
+                </div>
+
+                <!-- Comparison Mode UI -->
+                <div id="compareModeArea" class="comparison-container" style="display: none;">
+                    <div class="card photo-card comp-card">
+                        <p class="comp-label">Before (以前)</p>
+                        <div class="preview-area small" onclick="document.getElementById('fileCompB').click()">
+                            <div id="msgB" class="default-msg"><span>📸</span></div>
+                            <img id="prevB" src="" style="display: none;">
+                        </div>
+                        <input type="file" id="fileCompB" accept="image/*" style="display: none;">
+                    </div>
+                    <div class="card photo-card comp-card">
+                        <p class="comp-label">After (今回)</p>
+                        <div class="preview-area small" onclick="document.getElementById('fileCompA').click()">
+                            <div id="msgA" class="default-msg"><span>📸</span></div>
+                            <img id="prevA" src="" style="display: none;">
+                        </div>
+                        <input type="file" id="fileCompA" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+
+                <div class="actions-footer">
+                    <button id="btnAnalyze" class="analyze-btn" disabled onclick="handleExecution()">🚀 解析を実行</button>
                 </div>
             </section>
 
@@ -73,35 +95,88 @@
 
     <script>
         let currentView = 'front';
-        let selectedFile = null;
+        let fileSingle = null;
+        let fileB = null;
+        let fileA = null;
 
         function setView(view) {
             currentView = view;
             document.getElementById('btnFront').classList.toggle('active', view === 'front');
             document.getElementById('btnSide').classList.toggle('active', view === 'side');
+            document.getElementById('btnCompare').classList.toggle('active', view === 'compare');
+            
+            document.getElementById('singleModeArea').style.display = view === 'compare' ? 'none' : 'block';
+            document.getElementById('compareModeArea').style.display = view === 'compare' ? 'grid' : 'none';
+            checkReady();
         }
 
-        // 両方の入力イベントに共通の処理を紐付け
         const handleFileSelect = (e) => {
             const file = e.target.files[0];
-            if (file) {
-                selectedFile = file;
-                const reader = new FileReader();
-                reader.onload = (re) => {
-                    document.getElementById('imagePreview').src = re.target.result;
-                    document.getElementById('imagePreview').style.display = 'block';
-                    document.querySelector('.default-msg').style.display = 'none';
-                    document.getElementById('btnAnalyze').disabled = false;
-                };
-                reader.readAsDataURL(file);
-            }
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                const targetImg = document.getElementById('imagePreview');
+                targetImg.src = re.target.result;
+                targetImg.style.display = 'block';
+                document.querySelector('#singleModeArea .default-msg').style.display = 'none';
+                fileSingle = file;
+                checkReady();
+            };
+            reader.readAsDataURL(file);
         };
+
+        const handleCompB = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                document.getElementById('prevB').src = re.target.result;
+                document.getElementById('prevB').style.display = 'block';
+                document.getElementById('msgB').style.display = 'none';
+                fileB = file;
+                checkReady();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const handleCompA = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                document.getElementById('prevA').src = re.target.result;
+                document.getElementById('prevA').style.display = 'block';
+                document.getElementById('msgA').style.display = 'none';
+                fileA = file;
+                checkReady();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function checkReady() {
+            const btn = document.getElementById('btnAnalyze');
+            if (currentView === 'compare') {
+                btn.disabled = !(fileB && fileA);
+            } else {
+                btn.disabled = !fileSingle;
+            }
+        }
 
         document.getElementById('fileInputCamera').onchange = handleFileSelect;
         document.getElementById('fileInputLibrary').onchange = handleFileSelect;
+        document.getElementById('fileCompB').onchange = handleCompB;
+        document.getElementById('fileCompA').onchange = handleCompA;
+
+        async function handleExecution() {
+            if (currentView === 'compare') {
+                await startComparison();
+            } else {
+                await startAnalysis();
+            }
+        }
 
         async function startAnalysis() {
-            if (!selectedFile) return;
+            if (!fileSingle) return;
 
             document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('resultSection').style.display = 'none';
@@ -175,11 +250,12 @@
         }
 
         function reset() {
-            selectedFile = null;
-            document.getElementById('fileInputCamera').value = '';
-            document.getElementById('fileInputLibrary').value = '';
+            fileSingle = null; fileB = null; fileA = null;
+            document.querySelectorAll('input[type="file"]').forEach(i => i.value = '');
             document.getElementById('imagePreview').style.display = 'none';
-            document.querySelector('.default-msg').style.display = 'flex';
+            document.getElementById('prevB').style.display = 'none';
+            document.getElementById('prevA').style.display = 'none';
+            document.querySelectorAll('.default-msg').forEach(m => m.style.display = 'flex');
             document.getElementById('btnAnalyze').disabled = true;
             document.getElementById('resultSection').style.display = 'none';
             window.scrollTo({ top: 0, behavior: 'smooth' });

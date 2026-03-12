@@ -74,9 +74,39 @@ def analyze():
         else:
             return jsonify({'success': False, 'error': '人物が検出されませんでした。'}), 200
             
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/compare', methods=['POST'])
+def compare():
+    if 'image_before' not in request.files or 'image_after' not in request.files:
+        return jsonify({'error': 'Before/After both images are required'}), 400
+    
+    file_b = request.files['image_before']
+    file_a = request.files['image_after']
+    view_type = request.form.get('view_type', 'auto')
+
+    # ユニークファイル名生成
+    uid = uuid.uuid4().hex[:8]
+    ext_b = os.path.splitext(file_b.filename)[1] or ".jpg"
+    ext_a = os.path.splitext(file_a.filename)[1] or ".jpg"
+    
+    path_b = os.path.join(UPLOAD_FOLDER, f"comp_b_{uid}{ext_b}")
+    path_a = os.path.join(UPLOAD_FOLDER, f"comp_a_{uid}{ext_a}")
+    output_path = os.path.join(UPLOAD_FOLDER, f"report_comp_{uid}.jpg")
+    
+    file_b.save(path_b); file_a.save(path_a)
+
+    try:
+        success = get_analyzer().analyze_comparison(path_b, path_a, output_path, view_type=view_type)
+        if success:
+            return jsonify({
+                'success': True,
+                'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg')
+            })
+        else:
+            return jsonify({'success': False, 'error': '人物の検出に失敗しました。'}), 200
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        import traceback; print(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
