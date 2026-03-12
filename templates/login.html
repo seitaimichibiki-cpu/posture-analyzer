@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        /* These styles are now part of style.css or specific to this page */
         .login-container {
             display: flex;
             align-items: center;
@@ -58,6 +59,30 @@
             display: none;
             text-align: center;
         }
+        .alert-success {
+            background: rgba(0, 230, 118, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(0, 230, 118, 0.2);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .login-footer-links {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .login-footer-copyright {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -65,8 +90,8 @@
         <div class="login-box card">
             <div class="login-header">
                 <div class="logo">整体院 導</div>
-                <h1>AI 姿勢解析システム</h1>
-                <p class="subtitle">ログインしてツールを利用</p>
+                <h1>AI 姿勢解析</h1>
+                <p class="subtitle">PREMIUM EDITION</p>
             </div>
 
             <div id="errorMsg" class="error-msg"></div>
@@ -74,7 +99,7 @@
             {% with messages = get_flashed_messages(with_categories=true) %}
               {% if messages %}
                 {% for category, message in messages %}
-                  <div class="alert alert-{{ category }}" style="padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; text-align: center; background: rgba(46, 204, 113, 0.1); color: #2ecc71;">
+                  <div class="alert" style="background: rgba(0, 230, 118, 0.1); color: var(--success); border: 1px solid rgba(0, 230, 118, 0.2); padding: 12px; border-radius: 12px; font-size: 13px; margin-bottom: 20px; text-align: center; font-weight: 600;">
                     {{ message }}
                   </div>
                 {% endfor %}
@@ -90,8 +115,8 @@
                     <label for="password">パスワード</label>
                     <input type="password" id="password" class="form-control" placeholder="••••••••" required>
                 </div>
-                <button type="submit" id="submitBtn" class="analyze-btn primary-btn" style="width: 100%; margin-top: 10px;">
-                    ログイン
+                <button type="submit" id="submitBtn" class="analyze-btn" style="width: 100%; margin-top: 10px;">
+                    システムにログイン
                 </button>
                 <div style="margin-top: 15px; text-align: center;">
                     <a href="{{ url_for('forgot_password') }}" style="color: var(--accent); text-decoration: none; font-size: 14px;">パスワードを忘れた場合</a>
