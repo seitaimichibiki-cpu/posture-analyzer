@@ -31,6 +31,18 @@ def get_analyzer():
 def index():
     return render_template('index.html')
 
+@app.route('/download/<path:filename>')
+def download_image(filename):
+    # static/uploads ディレクトリからファイルを強制ダウンロードとして返す
+    directory = os.path.join(app.root_path, 'static', 'uploads')
+    # Content-Disposition ヘッダーを付けて、ブラウザに保存を促す
+    return send_from_directory(
+        directory, 
+        filename, 
+        as_attachment=True,
+        download_name=f"姿勢解析レポート_{uuid.uuid4().hex[:8]}.jpg"
+    )
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'image' not in request.files:

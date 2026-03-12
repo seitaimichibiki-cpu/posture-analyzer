@@ -113,10 +113,11 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    const filename = data.report_url.split('/').pop();
                     document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
                     const downloadBtn = document.getElementById('downloadBtn');
-                    downloadBtn.href = data.report_url;
-                    downloadBtn.download = `姿勢解析レポート_${new Date().getTime()}.jpg`;
+                    // 強制ダウンロード用ルートを使用
+                    downloadBtn.href = `./download/${filename}`;
                     document.getElementById('resultSection').style.display = 'block';
                     document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
                 } else {
