@@ -1,0 +1,42 @@
+import os
+import sys
+
+# プロジェクトルートをパスに追加
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from app import app, db, User
+from werkzeug.security import generate_password_hash
+
+def init_db():
+    print("データベース初期化中...")
+    with app.app_context():
+        # 既存のテーブルをすべて削除して再作成（開発中のみ）
+        db.drop_all()
+        db.create_all()
+        
+        # 管理者（導様）アカウントの作成
+        admin = User(
+            email='admin@michibiki.com',
+            password=generate_password_hash('michibiki2024', method='pbkdf2:sha256'),
+            is_active_member=True,
+            is_admin=True
+        )
+        
+        # テスト用一般会員アカウントの作成
+        test_user = User(
+            email='test@example.com',
+            password=generate_password_hash('test1234', method='pbkdf2:sha256'),
+            is_active_member=True,
+            is_admin=False
+        )
+
+        db.session.add(admin)
+        db.session.add(test_user)
+        db.session.commit()
+        
+        print(f"初期会員データを作成しました:")
+        print(f"  [管理者] admin@michibiki.com / michibiki2024")
+        print(f"  [テスト] test@example.com / test1234")
+
+if __name__ == '__main__':
+    init_db()

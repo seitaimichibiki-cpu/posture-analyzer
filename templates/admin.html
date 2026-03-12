@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会員管理 | 整体院 導</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .admin-table th, .admin-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .status-active { background: rgba(0, 200, 83, 0.2); color: var(--success); }
+        .status-inactive { background: rgba(255, 71, 87, 0.2); color: #ff4757; }
+        
+        .toggle-btn {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .toggle-btn.btn-off {
+            background: #4a5578;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>会員管理パネル</h1>
+            <p class="subtitle">サブスクリプション契約状態の管理</p>
+            <div style="margin-top: 15px;">
+                <a href="/" style="color: var(--text-muted); text-decoration: none; font-size: 14px;">← 解析ツールに戻る</a>
+            </div>
+        </header>
+
+        <main class="card">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ユーザー</th>
+                        <th>ステータス</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    {% if not user.is_admin %}
+                    <tr>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            <span id="status-{{ user.id }}" class="status-badge {{ 'status-active' if user.is_active_member else 'status-inactive' }}">
+                                {{ '契約中' if user.is_active_member else '未契約' }}
+                            </span>
+                        </td>
+                        <td>
+                            <button onclick="toggleUser({{ user.id }})" id="btn-{{ user.id }}" class="toggle-btn {{ '' if user.is_active_member else 'btn-off' }}">
+                                {{ '停止する' if user.is_active_member else '許可する' }}
+                            </button>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </main>
+    </div>
+
+    <script>
+        async function toggleUser(userId) {
+            const btn = document.getElementById(`btn-${userId}`);
+            const badge = document.getElementById(`status-${userId}`);
+            
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch(`/admin/toggle/${userId}`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const isActive = data.new_status;
+                    badge.className = `status-badge ${isActive ? 'status-active' : 'status-inactive'}`;
+                    badge.textContent = isActive ? '契約中' : '未契約';
+                    btn.className = `toggle-btn ${isActive ? '' : 'btn-off'}`;
+                    btn.textContent = isActive ? '停止する' : '許可する';
+                }
+            } catch (err) {
+                alert('エラーが発生しました。');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

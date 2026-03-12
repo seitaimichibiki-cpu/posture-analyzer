@@ -14,11 +14,28 @@
             <div class="logo">整体院 導</div>
             <h1>AI 姿勢解析システム</h1>
             <p class="subtitle">MediaPipe 高精度姿勢推定エンジン</p>
+
+            <div style="margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 13px;">
+                <span>👤 {{ user.email.split('@')[0] }} 様</span>
+                {% if user.is_active_member %}
+                <span style="color: var(--success);">● サブスク契約中</span>
+                {% else %}
+                <span style="color: #ff4757;">● 未契約（プレビューのみ）</span>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor;">ログアウト</a>
+            </div>
         </header>
 
         <main>
-            <section class="upload-section">
-                <div class="view-selector">
+            <div class="card">
+            {% if not user.is_active_member %}
+            <div style="background: rgba(255, 71, 87, 0.1); border: 1px solid #ff4757; color: #ff4757; padding: 15px; border-radius: 12px; margin-bottom: 20px; font-size: 14px; text-align: center;">
+                <strong>⚠️ 利用制限中</strong><br>
+                解析結果のダウンロードには、AirPAYでの月額契約が必要です。
+            </div>
+            {% endif %}
+
+            <div class="view-selector">
                     <button id="btnFront" class="view-btn active" onclick="setView('front')">正面解析</button>
                     <button id="btnSide" class="view-btn" onclick="setView('side')">側面解析</button>
                     <button id="btnCompare" class="view-btn" onclick="setView('compare')">比較（B/A）</button>

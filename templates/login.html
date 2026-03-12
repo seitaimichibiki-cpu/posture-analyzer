@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログイン | 整体院 導 AI姿勢解析</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-box {
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: #0a0e1a;
+            border: 1px solid var(--border);
+            color: white;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+        .error-msg {
+            background: rgba(255, 71, 87, 0.1);
+            color: #ff4757;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box card">
+            <div class="login-header">
+                <div class="logo">整体院 導</div>
+                <h1>AI 姿勢解析システム</h1>
+                <p class="subtitle">ログインしてツールを利用</p>
+            </div>
+
+            <div id="errorMsg" class="error-msg"></div>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">メールアドレス</label>
+                    <input type="email" id="email" class="form-control" placeholder="example@michibiki.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">パスワード</label>
+                    <input type="password" id="password" class="form-control" placeholder="••••••••" required>
+                </div>
+                <button type="submit" id="submitBtn" class="analyze-btn primary-btn flex-1" style="width: 100%; margin-top: 10px;">
+                    ログイン
+                </button>
+            </form>
+
+            <div style="margin-top: 30px; text-align: center; font-size: 12px; color: var(--text-muted);">
+                &copy; 2024 整体院 導. All rights Reserved.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const error = document.getElementById('errorMsg');
+            
+            btn.disabled = true;
+            btn.textContent = 'ログイン中...';
+            error.style.display = 'none';
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    error.textContent = data.error;
+                    error.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'ログイン';
+                }
+            } catch (err) {
+                error.textContent = '通信エラーが発生しました。';
+                error.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'ログイン';
+            }
+        });
+    </script>
+</body>
+</html>
