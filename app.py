@@ -49,6 +49,10 @@ def get_analyzer():
         _analyzer = PoseAnalyzer(MODEL_PATH)
     return _analyzer
 
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'})
+
 # ─── ルート定義 ──────────────────────────────────────────────────────────────
 @app.route('/')
 @login_required

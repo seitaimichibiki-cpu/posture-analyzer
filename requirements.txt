@@ -5,7 +5,7 @@ Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.48
 Werkzeug==3.1.6
 gunicorn==23.0.0
-opencv-python==4.13.0.92
+opencv-python-headless==4.13.0.92
 mediapipe==0.10.32
 pillow==11.3.0
 numpy==2.0.2
