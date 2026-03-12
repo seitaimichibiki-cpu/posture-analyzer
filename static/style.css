@@ -184,9 +184,9 @@ button {
 
 /* Comparison Mode Layout */
 .comparison-container {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    gap: 10px !important;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
     margin-bottom: 20px;
     width: 100%;
     overflow: hidden;
