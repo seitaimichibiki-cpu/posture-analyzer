@@ -23,6 +23,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 BACKUP_TOKEN = os.environ.get('BACKUP_TOKEN', 'seitai-backup-2026-safe')
 
 CORS(app)
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('error.html', code=404, title="Page Not Found"), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    if request.is_json:
+        return jsonify({'success': False, 'error': 'Internal Server Error'}), 500
+    return render_template('error.html', code=500, title="Server Error"), 500
+
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login' # ログインしていない場合に飛ばす先
