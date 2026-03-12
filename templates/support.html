@@ -99,6 +99,12 @@
                     alertBox.style.display = 'none';
 
                     try {
+                        const response = await fetch('/support/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+
                         if (!response.ok) {
                             const errorText = await response.text();
                             console.error('Server error response:', errorText);
