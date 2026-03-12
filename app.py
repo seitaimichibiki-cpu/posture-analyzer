@@ -331,6 +331,50 @@ def admin_backup():
         headers={"Content-disposition": "attachment; filename=members_backup.md"}
     )
 
+@app.route('/admin/export_csv')
+@login_required
+def admin_export_csv():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'error': '権限がありません。'}), 403
+    
+    import csv
+    import io
+    from flask import make_response
+
+    # 全ログ取得
+    logs = AnalysisLog.query.order_by(AnalysisLog.created_at.desc()).all()
+    
+    # メモリ上にCSV出力
+    output = io.StringIO()
+    # Excelで文字化けしないようBOMを追加
+    output.write('\ufeff')
+    writer = csv.writer(output)
+    
+    # ヘッダー
+    writer.writerow(['ID', '実行日時', 'ユーザーID/メール', '解析タイプ'])
+    
+    # データ
+    for log in logs:
+        user_info = f"UID:{log.user_id}"
+        if log.user_id:
+            user = User.query.get(log.user_id)
+            if user:
+                user_info = user.email
+        
+        # 日本時間に調整（簡易的）
+        jst_time = log.created_at + timedelta(hours=9)
+        writer.writerow([
+            log.id,
+            jst_time.strftime('%Y-%m-%d %H:%M:%S'),
+            user_info,
+            log.view_type
+        ])
+    
+    response = make_response(output.getvalue())
+    response.headers["Content-Disposition"] = f"attachment; filename=analysis_logs_{datetime.now().strftime('%Y%m%d')}.csv"
+    response.headers["Content-type"] = "text/csv; charset=utf-8-sig"
+    return response
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'image' not in request.files:

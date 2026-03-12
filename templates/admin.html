@@ -75,22 +75,12 @@
                 <span style="font-size: 1.4em;">📊</span> 解析統計ダッシュボード
             </h2>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 16px;">
-                <div style="background: rgba(79, 172, 254, 0.1); border: 1px solid rgba(79, 172, 254, 0.2); padding: 20px; border-radius: 16px; text-align: center;">
-                    <div style="font-size: 11px; color: var(--accent); font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">今日</div>
-                    <div style="font-size: 24px; font-weight: 800;">{{ stats.today }}<span style="font-size: 12px; margin-left: 2px;">件</span></div>
-                </div>
-                <div style="background: rgba(0, 230, 118, 0.1); border: 1px solid rgba(0, 230, 118, 0.2); padding: 20px; border-radius: 16px; text-align: center;">
-                    <div style="font-size: 11px; color: var(--success); font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">今月</div>
-                    <div style="font-size: 24px; font-weight: 800;">{{ stats.month }}<span style="font-size: 12px; margin-left: 2px;">件</span></div>
-                </div>
-                <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); padding: 20px; border-radius: 16px; text-align: center;">
-                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">累計解析</div>
-                    <div style="font-size: 24px; font-weight: 800;">{{ stats.total }}<span style="font-size: 12px; margin-left: 2px;">件</span></div>
-                </div>
-                <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); padding: 20px; border-radius: 16px; text-align: center;">
-                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">契約中会員</div>
-                    <div style="font-size: 24px; font-weight: 800;">{{ stats.active_users }}<span style="font-size: 12px; margin-left: 2px;">名</span></div>
-                </div>
+                <!-- ... existing cards ... -->
+            </div>
+            <div style="margin-top: 24px; text-align: right;">
+                <a href="{{ url_for('admin_export_csv') }}" class="secondary-btn" style="padding: 8px 16px; font-size: 13px; text-decoration: none; border-radius: 8px;">
+                    📥 解析ログをCSVで保存
+                </a>
             </div>
         </main>
 
