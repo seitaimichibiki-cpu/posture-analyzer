@@ -184,17 +184,21 @@ button {
 
 /* Comparison Mode Layout */
 .comparison-container {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 10px !important;
     margin-bottom: 20px;
     width: 100%;
-    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .comp-card {
-    padding: 8px !important;
-    min-width: 0; /* グリッドアイテムのはみ出し防止 */
+    flex: 1 !important;
+    min-width: 0 !important; /* 重要：中身による押し出しを防止 */
+    padding: 10px !important;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
 }
@@ -209,21 +213,29 @@ button {
 }
 
 .preview-area.small {
-    height: 180px !important;
-    min-height: 180px !important;
-    max-height: 180px !important;
+    width: 100% !important;
+    height: 150px !important;
+    min-height: 150px !important;
+    max-height: 150px !important;
     margin-bottom: 0;
-    border-style: solid;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
     background: #060912;
     overflow: hidden;
+    position: relative;
+}
+
+.preview-area.small img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
 }
 
 .preview-area.small .default-msg {
-    transform: scale(0.8);
-}
-
-.preview-area.small .icon {
-    font-size: 20px;
+    transform: scale(0.7);
 }
 
 /* Loading Overlay */
