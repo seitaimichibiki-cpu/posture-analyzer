@@ -138,7 +138,21 @@ button {
     color: white;
     padding: 16px;
     border-radius: 12px;
-    font-size: 16px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.flex-1 {
+    flex: 1;
 }
 
 .analyze-btn {

@@ -33,8 +33,14 @@
                     </div>
                     
                     <div class="actions">
-                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
-                        <button class="primary-btn" onclick="document.getElementById('fileInput').click()">📸 撮影・写真を選択</button>
+                        <!-- ボタンごとに異なる入力を使い分ける -->
+                        <input type="file" id="fileInputCamera" accept="image/*" capture="camera" style="display: none;">
+                        <input type="file" id="fileInputLibrary" accept="image/*" style="display: none;">
+                        
+                        <div class="input-group">
+                            <button class="primary-btn flex-1" onclick="document.getElementById('fileInputCamera').click()">📸 写真を撮る</button>
+                            <button class="primary-btn flex-1" onclick="document.getElementById('fileInputLibrary').click()">📁 フォルダから選択</button>
+                        </div>
                         <button id="btnAnalyze" class="analyze-btn" disabled onclick="startAnalysis()">🚀 解析を実行</button>
                     </div>
                 </div>
@@ -75,7 +81,8 @@
             document.getElementById('btnSide').classList.toggle('active', view === 'side');
         }
 
-        document.getElementById('fileInput').onchange = (e) => {
+        // 両方の入力イベントに共通の処理を紐付け
+        const handleFileSelect = (e) => {
             const file = e.target.files[0];
             if (file) {
                 selectedFile = file;
@@ -89,6 +96,9 @@
                 reader.readAsDataURL(file);
             }
         };
+
+        document.getElementById('fileInputCamera').onchange = handleFileSelect;
+        document.getElementById('fileInputLibrary').onchange = handleFileSelect;
 
         async function startAnalysis() {
             if (!selectedFile) return;
@@ -166,7 +176,8 @@
 
         function reset() {
             selectedFile = null;
-            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInputCamera').value = '';
+            document.getElementById('fileInputLibrary').value = '';
             document.getElementById('imagePreview').style.display = 'none';
             document.querySelector('.default-msg').style.display = 'flex';
             document.getElementById('btnAnalyze').disabled = true;
