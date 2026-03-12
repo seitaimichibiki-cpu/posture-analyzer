@@ -62,13 +62,19 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
         user = User.query.filter_by(email=email).first()
         
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            return jsonify({'success': True})
+        if user:
+            if check_password_hash(user.password, password):
+                login_user(user)
+                return jsonify({'success': True})
+            else:
+                print(f"Login failed: Password mismatch for {email}")
+        else:
+            print(f"Login failed: User not found: {email}")
+            
         return jsonify({'success': False, 'error': 'メールアドレスまたはパスワードが正しくありません。'}), 401
     return render_template('login.html')
 
