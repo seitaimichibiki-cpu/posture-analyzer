@@ -73,7 +73,8 @@ def analyze():
             })
         else:
             return jsonify({'success': False, 'error': '人物が検出されませんでした。'}), 200
-            
+    except Exception as e:
+        import traceback; print(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/compare', methods=['POST'])
