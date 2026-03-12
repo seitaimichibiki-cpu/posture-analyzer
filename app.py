@@ -33,6 +33,15 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', 'seitaimichi
 
 mail = Mail(app)
 
+# 起動ログ (デバッグ用)
+print(f"--- 起動設定確認 ---")
+print(f"MAIL_USERNAME: {app.config.get('MAIL_USERNAME')}")
+pwd = app.config.get('MAIL_PASSWORD')
+print(f"MAIL_PASSWORD: {'設定済み' if pwd else '未設定'}")
+if pwd:
+    print(f"MAIL_PASSWORD (先頭2文字): {pwd[:2]}...")
+print(f"-------------------")
+
 CORS(app)
 @app.errorhandler(404)
 def page_not_found(e):

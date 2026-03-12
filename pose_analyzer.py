@@ -77,7 +77,7 @@ class PoseAnalyzer:
     def analyze(self, image_path, output_path, view_type='auto'):
         """単一画像の解析メインエントリ"""
         img = cv2.imread(image_path)
-        if img is None: return None
+        if img is None: return {'success': False, 'error': 'Image load failed'}
 
         # 1. リサイズ（標準化）
         orig_h, orig_w = img.shape[:2]
@@ -96,7 +96,7 @@ class PoseAnalyzer:
 
         if not result.pose_landmarks:
             print(f"  [SKIP] 人物が検出されませんでした: {os.path.basename(image_path)}")
-            return None
+            return {'success': False, 'error': 'No person detected'}
 
         lm = result.pose_landmarks[0]
 
@@ -109,9 +109,11 @@ class PoseAnalyzer:
         # 後処理
         res = None
         if view == 'front':
-            res = self._analyze_front(img, lm, w, h, output_path)
+            success, data = self._analyze_front(img, lm, w, h, output_path)
+            res = {'success': success, 'data': data, 'view': 'front'}
         else:
-            res = self._analyze_side(img, lm, w, h, output_path)
+            success, data = self._analyze_side(img, lm, w, h, output_path)
+            res = {'success': success, 'data': data, 'view': 'side'}
             
         # 明示的なメモリ解放
         del mp_image, result, img
@@ -122,7 +124,7 @@ class PoseAnalyzer:
         """2枚の画像を比較解析する"""
         import gc
         img1_orig, img2_orig = cv2.imread(img_path1), cv2.imread(img_path2)
-        if img1_orig is None or img2_orig is None: return False
+        if img1_orig is None or img2_orig is None: return {'success': False, 'error': 'Image load failed'}
 
         # 解析用リサイズ
         def prep(im):
@@ -138,8 +140,8 @@ class PoseAnalyzer:
         mpi1, res1 = detect(i1); mpi2, res2 = detect(i2)
 
         if not res1.pose_landmarks or not res2.pose_landmarks:
-            print("  [SKIP] 比較対象の人物が検出されませんでした")
-            return False
+            print(f"  [SKIP] 比較対象の人物が検出されませんでした")
+            return {'success': False, 'error': 'No person detected in one or both images'}
 
         lm1, lm2 = res1.pose_landmarks[0], res2.pose_landmarks[0]
         view = view_type if view_type != 'auto' else self._detect_view(lm2)
@@ -157,9 +159,16 @@ class PoseAnalyzer:
         # レポート合成 [Before][After][Panel]
         success = self._save_comparison_report(res_img1, res_img2, panel, output_path, f"比較（{view}）")
 
+        # 数値データを辞書で返す
+        data = {
+            'before': items1,
+            'after': items2,
+            'view': view
+        }
+
         del mpi1, res1, mpi2, res2, i1, i2, img1_orig, img2_orig
         gc.collect()
-        return success
+        return {'success': success, 'data': data}
 
     def _process_front_for_comp(self, img, lm):
         """比較用の正面描画（内部処理）"""
@@ -308,7 +317,18 @@ class PoseAnalyzer:
             {"name": "骨盤ズレ（正中線）", "normal": 0.0, "measured": pelv_shift_pct, "diff": abs(pelv_shift_pct), "direction": "右偏位" if pelv_shift_pct > 0 else "左偏位", "score": ts_score},
         ]
         panel = build_panel(score_items, risk_msgs, 560, fh)
-        return self._save_final_report(img_final, panel, output_path, "正面")
+        success = self._save_final_report(img_final, panel, output_path, "正面")
+        
+        # 数値データを辞書で返す
+        data = {
+            'head_angle': head_a,
+            'shoulder_angle': shldr_a,
+            'pelvis_angle': pelvis_a,
+            'ear_shift_pct': ear_shift_pct,
+            'shoulder_shift_pct': shldr_shift_pct,
+            'pelvis_shift_pct': pelv_shift_pct
+        }
+        return success, data
 
     # ── 内部解析ロジック (側面) ──
     def _analyze_side(self, img, lm, w, h, output_path):
@@ -386,7 +406,16 @@ class PoseAnalyzer:
             {"name":"体幹ライン領域","ideal":"0%","measured":f"{trunk_pct:+.1f}%","diff":f"{abs(trunk_pct):.1f}%","score":trk_sc},
         ]
         panel = build_side_panel(score_items, risk_msgs, 560, fh)
-        return self._save_final_report(img_final, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
+        success = self._save_final_report(img_final, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
+        
+        # 数値データを辞書で返す
+        data = {
+            'fhp_pct': fhp_pct,
+            'rs_pct': rs_pct,
+            'pelvis_angle': pel_a,
+            'trunk_pct': trunk_pct
+        }
+        return success, data
 
     def _get_crop_box(self, lm, w, h):
         """人物の存在範囲から切り抜き範囲(x1, y1, x2, y2)を計算する"""
