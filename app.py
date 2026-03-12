@@ -233,6 +233,44 @@ def update_password():
     db.session.commit()
     return jsonify({'success': True})
 
+@app.route('/stats')
+@login_required
+def stats():
+    patient_id = request.args.get('patient_id', '')
+    return render_template('stats.html', user=current_user, patient_id=patient_id)
+
+@app.route('/api/patient_stats')
+@login_required
+def api_patient_stats():
+    patient_id = request.args.get('patient_id')
+    if not patient_id:
+        return jsonify({'success': False, 'error': '顧客IDが必要です。'}), 400
+    
+    # 現在のログインユーザー（先生）が保存した、この患者のレコードを古い順に取得
+    records = AnalysisRecord.query.filter_by(
+        user_id=current_user.id, 
+        patient_id=patient_id
+    ).order_by(AnalysisRecord.created_at.asc()).all()
+    
+    data = []
+    for r in records:
+        jst_time = r.created_at + timedelta(hours=9)
+        data.append({
+            'date': jst_time.strftime('%Y-%m-%d %H:%M'),
+            'view': r.view_type,
+            'shoulder_angle': r.shoulder_angle,
+            'pelvis_angle': r.pelvis_angle,
+            'head_angle': r.head_angle,
+            'ear_shift': r.ear_shift_pct,
+            'fhp': r.fhp_pct,
+            'rs': r.rs_pct,
+            'trunk': r.trunk_pct
+        })
+    
+    # 重複する日付やデータが多い場合に備え、ビューごとに分けたデータも検討可能ですが
+    # フロントエンド側でフィルタリングする方が柔軟。
+    return jsonify({'success': True, 'data': data})
+
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
