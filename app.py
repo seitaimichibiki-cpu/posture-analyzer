@@ -40,8 +40,8 @@ def page_not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    if request.is_json:
-        return jsonify({'success': False, 'error': 'Internal Server Error'}), 500
+    if request.is_json or request.path.startswith('/api/') or request.path.endswith('/send'):
+        return jsonify({'success': False, 'error': f'Internal Server Error: {str(e)}'}), 500
     return render_template('error.html', code=500, title="Server Error"), 500
 
 db = SQLAlchemy(app)
@@ -263,6 +263,10 @@ def support_send():
         return jsonify({'success': False, 'error': 'すべての項目を入力してください。'}), 400
 
     try:
+        if not app.config.get('MAIL_PASSWORD'):
+            print("警告: MAIL_PASSWORD が設定されていません。")
+            return jsonify({'success': False, 'error': '現在、メール送信機能が一時的に利用できません（パスワード未設定）。'}), 503
+
         msg = Message(
             subject=f"【お問い合わせ】{subject}",
             recipients=['seitaimichibiki@gmail.com'],
@@ -271,8 +275,10 @@ def support_send():
         mail.send(msg)
         return jsonify({'success': True})
     except Exception as e:
-        print(f"メール送信エラー: {e}")
-        return jsonify({'success': False, 'error': 'メールの送信に失敗しました。時間をおいて再度お試しください。'}), 500
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f"メール送信エラー詳細:\n{error_msg}")
+        return jsonify({'success': False, 'error': f'メールの送信に失敗しました: {str(e)}'}), 500
 
 @app.route('/stats')
 @login_required
