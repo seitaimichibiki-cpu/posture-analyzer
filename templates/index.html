@@ -33,7 +33,7 @@
                     </div>
                     
                     <div class="actions">
-                        <input type="file" id="fileInput" accept="image/*" capture="camera" style="display: none;">
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
                         <button class="primary-btn" onclick="document.getElementById('fileInput').click()">📸 撮影・写真を選択</button>
                         <button id="btnAnalyze" class="analyze-btn" disabled onclick="startAnalysis()">🚀 解析を実行</button>
                     </div>
@@ -114,10 +114,14 @@
 
                 if (data.success) {
                     const filename = data.report_url.split('/').pop();
-                    document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
+                    const reportUrl = data.report_url + '?t=' + Date.now();
+                    document.getElementById('resultImage').src = reportUrl;
+                    
                     const downloadBtn = document.getElementById('downloadBtn');
-                    // 強制ダウンロード用ルートを使用
-                    downloadBtn.href = `./download/${filename}`;
+                    // フルURLを生成して確実にダウンロードルートへ飛ばす
+                    const downloadUrl = window.location.origin + '/download/' + filename;
+                    downloadBtn.href = downloadUrl;
+                    
                     document.getElementById('resultSection').style.display = 'block';
                     document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
                 } else {
