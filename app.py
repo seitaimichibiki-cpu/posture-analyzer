@@ -147,6 +147,32 @@ def admin_register_user():
     
     return jsonify({'success': True})
 
+@app.route('/admin/backup')
+@login_required
+def admin_backup():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'error': '権限がありません。'}), 403
+    
+    users = User.query.all()
+    
+    # Obsidian用のMarkdownテーブル作成
+    md_content = "# 会員リストバックアップ\n\n"
+    md_content += "| ID | メールアドレス | 契約ステータス | 管理者権限 |\n"
+    md_content += "|---|---|---|---|\n"
+    
+    for user in users:
+        status = "契約中" if user.is_active_member else "未契約"
+        admin = "はい" if user.is_admin else "いいえ"
+        md_content += f"| {user.id} | {user.email} | {status} | {admin} |\n"
+    
+    # レスポンスとしてファイルを返す
+    from flask import Response
+    return Response(
+        md_content,
+        mimetype="text/markdown",
+        headers={"Content-disposition": "attachment; filename=members_backup.md"}
+    )
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'image' not in request.files:
