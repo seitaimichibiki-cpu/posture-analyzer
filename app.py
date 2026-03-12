@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -64,6 +64,12 @@ def init_and_migrate():
                     conn.execute(text('ALTER TABLE user ADD COLUMN locked_until DATETIME'))
                     conn.commit()
                 print("Database migrated: Added login attempt limiting columns.")
+            
+            # 数値データ保存用のテーブル作成（自動migrate）
+            inspector = inspect(db.engine)
+            if 'analysis_record' not in inspector.get_table_names():
+                db.create_all()
+                print("Database migrated: Created analysis_record table.")
         except Exception as e:
             # ログに出力
             app.logger.error(f"Migration error: {e}")
@@ -87,6 +93,27 @@ class AnalysisLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     view_type = db.Column(db.String(20), nullable=False) # 'front', 'side', 'compare'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class AnalysisRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    view_type = db.Column(db.String(20)) # 'front', 'side'
+    
+    # 正面データ
+    shoulder_angle = db.Column(db.Float)
+    pelvis_angle = db.Column(db.Float)
+    head_angle = db.Column(db.Float)
+    ear_shift_pct = db.Column(db.Float)
+    shoulder_shift_pct = db.Column(db.Float)
+    pelvis_shift_pct = db.Column(db.Float)
+    
+    # 側面データ
+    fhp_pct = db.Column(db.Float)
+    rs_pct = db.Column(db.Float)
+    side_pelvis_angle = db.Column(db.Float)
+    trunk_pct = db.Column(db.Float)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 @login_manager.user_loader
@@ -406,12 +433,34 @@ def analyze():
 
     try:
         # 新しいクラスベースの解析実行
-        success = get_analyzer().analyze(input_path, output_path, view_type=view_type)
+        res = get_analyzer().analyze(input_path, output_path, view_type=view_type)
 
-        if success:
+        if res and res.get('success'):
             # ログ記録
-            log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type=view_type)
+            log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type=res.get('view', view_type))
             db.session.add(log)
+            
+            # 数値データの保存
+            try:
+                data = res.get('data', {})
+                record = AnalysisRecord(
+                    user_id=current_user.id if current_user.is_authenticated else None,
+                    view_type=res.get('view', view_type),
+                    shoulder_angle=data.get('shoulder_angle'),
+                    pelvis_angle=data.get('pelvis_angle'),
+                    head_angle=data.get('head_angle'),
+                    ear_shift_pct=data.get('ear_shift_pct'),
+                    shoulder_shift_pct=data.get('shoulder_shift_pct'),
+                    pelvis_shift_pct=data.get('pelvis_shift_pct'),
+                    fhp_pct=data.get('fhp_pct'),
+                    rs_pct=data.get('rs_pct'),
+                    side_pelvis_angle=data.get('pelvis_angle') if res.get('view') == 'side' else None,
+                    trunk_pct=data.get('trunk_pct')
+                )
+                db.session.add(record)
+            except Exception as e:
+                print(f"Failed to save numerical data: {e}")
+            
             db.session.commit()
             
             return jsonify({
@@ -445,11 +494,43 @@ def compare():
     file_b.save(path_b); file_a.save(path_a)
 
     try:
-        success = get_analyzer().analyze_comparison(path_b, path_a, output_path, view_type=view_type)
-        if success:
+        res = get_analyzer().analyze_comparison(path_b, path_a, output_path, view_type=view_type)
+        if res and res[0]: # res[0] is success
+            success = res[0]
+            data = res[1]
+            view = data.get('view', view_type)
+            
             # ログ記録
             log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type='compare')
             db.session.add(log)
+            
+            # 数値データの保存（BeforeとAfter両方保存する例）
+            def save_comp_data(items, prefix_type):
+                # items is a list of {"n": name, "v": value, "s": score}
+                # mapping to columns
+                d = {it['n']: it['v'] for it in items}
+                record = AnalysisRecord(
+                    user_id=current_user.id if current_user.is_authenticated else None,
+                    view_type=f"{view}_{prefix_type}",
+                    shoulder_angle=d.get('肩傾き') or d.get('ラウンド肩'),
+                    pelvis_angle=d.get('骨盤傾き') or d.get('骨盤前後傾'),
+                    head_angle=d.get('頭部傾き'),
+                    ear_shift_pct=d.get('頭部ズレ'),
+                    shoulder_shift_pct=d.get('肩部ズレ'),
+                    pelvis_shift_pct=d.get('骨盤ズレ'),
+                    fhp_pct=d.get('FHP'),
+                    rs_pct=d.get('ラウンド肩'),
+                    # side_pelvis_angle は pelvis_angle と共通化
+                    trunk_pct=d.get('体幹領域') or d.get('体幹ライン')
+                )
+                db.session.add(record)
+
+            try:
+                save_comp_data(data['before'], 'before')
+                save_comp_data(data['after'], 'after')
+            except Exception as e:
+                print(f"Failed to save comparison numerical data: {e}")
+
             db.session.commit()
 
             return jsonify({
