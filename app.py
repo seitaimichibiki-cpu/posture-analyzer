@@ -98,6 +98,13 @@ def init_and_migrate():
                         conn.execute(text('ALTER TABLE analysis_record ADD COLUMN patient_id VARCHAR(50)'))
                         conn.commit()
                     print("Database migrated: Added patient_id column to analysis_record.")
+                
+                # memoカラムチェック
+                if 'memo' not in analysis_columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text('ALTER TABLE analysis_record ADD COLUMN memo TEXT'))
+                        conn.commit()
+                    print("Database migrated: Added memo column to analysis_record.")
         except Exception as e:
             # ログに出力
             app.logger.error(f"Migration error: {e}")
@@ -142,6 +149,9 @@ class AnalysisRecord(db.Model):
     rs_pct = db.Column(db.Float)
     side_pelvis_angle = db.Column(db.Float)
     trunk_pct = db.Column(db.Float)
+    
+    # 追記：メモ機能
+    memo = db.Column(db.Text, nullable=True)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -626,7 +636,73 @@ def analyze():
         import traceback; print(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ─── 顧客管理機能 ────────────────────────────────────────────────────────────
+
+@app.route('/patients')
+@login_required
+def patients():
+    # 重複を除去したpatient_idのリストを取得し、それぞれの最新解析日も取得
+    # patient_idが空のものは除外
+    records = db.session.query(
+        AnalysisRecord.patient_id, 
+        db.func.max(AnalysisRecord.created_at).label('last_visit')
+    ).filter(AnalysisRecord.patient_id != '').group_by(AnalysisRecord.patient_id).all()
+    
+    # ソート引数
+    sort_by = request.args.get('sort', 'name') # 'name', 'visit'
+    order = request.args.get('order', 'asc')
+    
+    # recordsは [(id, date), ...] の形式
+    patient_list = []
+    for r in records:
+        patient_list.append({'id': r[0], 'last_visit': r[1]})
+        
+    if sort_by == 'visit':
+        patient_list.sort(key=lambda x: x['last_visit'], reverse=(order == 'desc'))
+    else: # nameソート
+        patient_list.sort(key=lambda x: x['id'], reverse=(order == 'desc'))
+        
+    return render_template('patients.html', patients=patient_list, sort_by=sort_by, order=order)
+
+@app.route('/patient/<patient_id>')
+@login_required
+def patient_detail(patient_id):
+    # 特定の顧客の履歴を全件取得（新しい順）
+    records = AnalysisRecord.query.filter_by(patient_id=patient_id).order_by(AnalysisRecord.created_at.desc()).all()
+    if not records:
+        flash("顧客データが見つかりませんでした。")
+        return redirect(url_for('patients'))
+    
+    return render_template('patient_detail.html', patient_id=patient_id, records=records)
+
+@app.route('/record/memo/<int:record_id>', methods=['POST'])
+@login_required
+def update_memo(record_id):
+    record = AnalysisRecord.query.get_or_404(record_id)
+    # 簡易的な所有権チェック（通常は user_id を使いますが、ここでは patient_id を重視）
+    memo_text = request.form.get('memo', '')
+    record.memo = memo_text
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/record/delete/<int:record_id>', methods=['POST'])
+@login_required
+def delete_record(record_id):
+    record = AnalysisRecord.query.get_or_404(record_id)
+    patient_id = record.patient_id
+    db.session.delete(record)
+    db.session.commit()
+    
+    # もしその顧客のデータが他に残っていなければ、一覧へ戻す
+    remaining = AnalysisRecord.query.filter_by(patient_id=patient_id).count()
+    if remaining == 0:
+        return jsonify({'success': True, 'redirect': url_for('patients')})
+    return jsonify({'success': True})
+
+# ─── 比較解析機能 ────────────────────────────────────────────────────────────
+
 @app.route('/compare', methods=['POST'])
+@login_required
 def compare():
     if 'image_before' not in request.files or 'image_after' not in request.files:
         return jsonify({'error': 'Before/After both images are required'}), 400

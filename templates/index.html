@@ -28,8 +28,9 @@
                 {% else %}
                 <span style="color: #ff4757;">● 未契約（プレビューのみ）</span>
                 {% endif %}
-                <a href="{{ url_for('profile') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor; margin-right: 10px;">マイページ</a>
-                <a href="{{ url_for('logout') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor;">ログアウト</a>
+                <a href="{{ url_for('patients') }}" style="color: var(--accent); text-decoration: none; font-weight: 700; border: 1px solid var(--accent); padding: 2px 8px; border-radius: 6px; font-size: 11px;">👥 顧客管理</a>
+                <a href="{{ url_for('profile') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor; margin-left: 10px;">マイページ</a>
+                <a href="{{ url_for('logout') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor; margin-left: 10px;">ログアウト</a>
                 {% if user.is_admin %}
                 <a href="{{ url_for('admin') }}" style="color: var(--accent); text-decoration: none; font-weight: 700; border: 1px solid var(--accent); padding: 2px 8px; border-radius: 6px; font-size: 11px;">管理者パネル</a>
                 {% endif %}

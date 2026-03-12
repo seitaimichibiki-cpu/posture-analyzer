@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顧客管理 ｜ 整体院 導</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .patient-list {
+            display: grid;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .patient-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+        }
+        .patient-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+        .patient-info h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text-bright);
+        }
+        .patient-info p {
+            margin: 5px 0 0;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .sort-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .sort-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .sort-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>顧客管理</h1>
+            <p class="subtitle">登録済みの顧客データ一覧</p>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('index') }}" style="color: var(--text-muted); text-decoration: none; font-size: 13px;">← トップへ戻る</a>
+            </div>
+        </header>
+
+        <main>
+            <div class="card">
+                <div class="sort-controls">
+                    <span style="align-self: center; margin-right: 5px;">並び替え:</span>
+                    <a href="{{ url_for('patients', sort='name', order='asc' if sort_by == 'name' and order == 'desc' else 'desc') }}" 
+                       class="sort-btn {{ 'active' if sort_by == 'name' else '' }}">
+                        名前順 {{ '▲' if sort_by == 'name' and order == 'asc' else '▼' if sort_by == 'name' else '' }}
+                    </a>
+                    <a href="{{ url_for('patients', sort='visit', order='asc' if sort_by == 'visit' and order == 'desc' else 'desc') }}" 
+                       class="sort-btn {{ 'active' if sort_by == 'visit' else '' }}">
+                        来店日順 {{ '▲' if sort_by == 'visit' and order == 'asc' else '▼' if sort_by == 'visit' else '' }}
+                    </a>
+                </div>
+
+                <div class="patient-list">
+                    {% for patient in patients %}
+                    <a href="{{ url_for('patient_detail', patient_id=patient.id) }}" class="patient-card">
+                        <div class="patient-info">
+                            <h3>ID/名前: {{ patient.id }}</h3>
+                            <p>最終解析日: {{ patient.last_visit.strftime('%Y/%m/%d %H:%M') }}</p>
+                        </div>
+                        <div class="patient-arrow" style="color: var(--accent); font-weight: bold;">→</div>
+                    </a>
+                    {% else %}
+                    <div class="empty-state">
+                        <p>顧客データがまだありません。<br>トップページから解析を行うと自動的に登録されます。</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

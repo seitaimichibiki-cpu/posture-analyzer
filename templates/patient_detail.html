@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顧客詳細 ｜ {{ patient_id }} ｜ 整体院 導</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .history-list {
+            margin-top: 20px;
+        }
+        .history-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 10px;
+        }
+        .history-date {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+        .history-type {
+            font-size: 12px;
+            background: var(--accent);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: white;
+        }
+        .memo-area {
+            margin-top: 15px;
+        }
+        .memo-label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .memo-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-bright);
+            padding: 10px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 60px;
+            box-sizing: border-box;
+        }
+        .memo-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .save-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 6px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .delete-btn {
+            background: transparent;
+            color: #ff4757;
+            border: 1px solid #ff4757;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .delete-btn:hover {
+            opacity: 1;
+            background: rgba(255, 71, 87, 0.1);
+        }
+        .save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status-msg {
+            font-size: 11px;
+            margin-left: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>顧客詳細: {{ patient_id }}</h1>
+            <p class="subtitle">解析履歴と施術記録</p>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('patients') }}" style="color: var(--text-muted); text-decoration: none; font-size: 13px;">← 顧客一覧へ戻る</a>
+            </div>
+        </header>
+
+        <main>
+            <div class="history-list">
+                {% for record in records %}
+                <div id="record-{{ record.id }}" class="history-item">
+                    <div class="history-header">
+                        <div class="history-date">{{ record.created_at.strftime('%Y年%m月%d日 %H:%M') }}</div>
+                        <div class="history-type">{{ '正面' if record.view_type == 'front' else '側面' if record.view_type == 'side' else '比較' }}</div>
+                    </div>
+
+                    <div class="memo-area">
+                        <label class="memo-label">📝 施術・状態メモ</label>
+                        <textarea id="memo-field-{{ record.id }}" class="memo-input" placeholder="例：首の張りが強い。施術後、肩のラインが改善。">{{ record.memo if record.memo else '' }}</textarea>
+                        
+                        <div class="memo-actions">
+                            <div>
+                                <button class="save-btn" onclick="saveMemo({{ record.id }})">保存する</button>
+                                <span id="status-{{ record.id }}" class="status-msg" style="color: var(--success);">✅ 保存完了</span>
+                            </div>
+                            <button class="delete-btn" onclick="deleteRecord({{ record.id }})">削除</button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </main>
+    </div>
+
+    <script>
+        async function saveMemo(recordId) {
+            const memoField = document.getElementById(`memo-field-${recordId}`);
+            const statusMsg = document.getElementById(`status-${recordId}`);
+            const saveBtn = memoField.nextElementSibling.querySelector('.save-btn');
+            
+            const formData = new FormData();
+            formData.append('memo', memoField.value);
+
+            try {
+                saveBtn.disabled = true;
+                const response = await fetch(`/record/memo/${recordId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusMsg.style.display = 'inline';
+                    setTimeout(() => {
+                        statusMsg.style.display = 'none';
+                    }, 2000);
+                }
+            } catch (err) {
+                alert('メモの保存に失敗しました。');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        async function deleteRecord(recordId) {
+            if (!confirm('この解析データを削除してもよろしいですか？\n（復元はできません）')) return;
+
+            try {
+                const response = await fetch(`/record/delete/${recordId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                    } else {
+                        const element = document.getElementById(`record-${recordId}`);
+                        element.style.opacity = '0';
+                        setTimeout(() => {
+                            element.remove();
+                        }, 500);
+                    }
+                }
+            } catch (err) {
+                alert('削除に失敗しました。');
+            }
+        }
+    </script>
+</body>
+</html>
