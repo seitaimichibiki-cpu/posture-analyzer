@@ -205,6 +205,25 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html', user=current_user)
+
+@app.route('/profile/update_password', methods=['POST'])
+@login_required
+def update_password():
+    data = request.json
+    current_pw = data.get('current_password')
+    new_pw = data.get('new_password')
+    
+    if not check_password_hash(current_user.password, current_pw):
+        return jsonify({'success': False, 'error': '現在のパスワードが正しくありません。'}), 401
+    
+    current_user.password = generate_password_hash(new_pw)
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/terms')
 def terms():
     return render_template('terms.html')

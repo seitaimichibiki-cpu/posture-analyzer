@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>マイページ ｜ 整体院 導</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .profile-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .info-group {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: block;
+        }
+        .info-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .status-active {
+            background: rgba(80, 230, 120, 0.15);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        .status-inactive {
+            background: rgba(255, 71, 87, 0.15);
+            color: #ff4757;
+            border: 1px solid #ff4757;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-light);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+        .message.success {
+            background: rgba(80, 230, 120, 0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+            display: block;
+        }
+        .message.error {
+            background: rgba(255, 71, 87, 0.1);
+            color: #ff4757;
+            border: 1px solid #ff4757;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>マイページ</h1>
+            <p class="subtitle">アカウント情報の管理</p>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('index') }}" style="color: var(--text-muted); text-decoration: none; font-size: 14px;">← 解析画面に戻る</a>
+            </div>
+        </header>
+
+        <main class="profile-container">
+            <section class="card">
+                <h2 style="margin-bottom: 20px; font-size: 18px; color: var(--accent);">👤 会員情報</h2>
+                
+                <div class="info-group">
+                    <span class="info-label">メールアドレス</span>
+                    <div class="info-value">{{ user.email }}</div>
+                </div>
+
+                <div class="info-group">
+                    <span class="info-label">契約ステータス</span>
+                    <div>
+                        {% if user.is_active_member %}
+                        <span class="status-badge status-active">● サブスク契約中</span>
+                        {% else %}
+                        <span class="status-badge status-inactive">● 未契約（プレビューのみ）</span>
+                        {% endif %}
+                    </div>
+                    {% if not user.is_active_member %}
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
+                        ※解析結果のダウンロードにはAirPAYでのご契約が必要です。窓口にてお問い合わせください。
+                    </p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="card" style="margin-top: 30px;">
+                <h2 style="margin-bottom: 20px; font-size: 18px; color: var(--accent);">🔒 パスワード変更</h2>
+                
+                <div id="alertBox" class="message"></div>
+
+                <form id="passwordForm">
+                    <div class="form-group">
+                        <label for="current_password">現在のパスワード</label>
+                        <input type="password" id="current_password" name="current_password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_password">新しいパスワード</label>
+                        <input type="password" id="new_password" name="new_password" required minlength="8">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm_password">新しいパスワード（確認）</label>
+                        <input type="password" id="confirm_password" name="confirm_password" required minlength="8">
+                    </div>
+                    
+                    <button type="submit" class="primary-btn" style="width: 100%; margin-top: 10px;">
+                        パスワードを更新する
+                    </button>
+                </form>
+            </section>
+        </main>
+
+        <footer style="margin-top: 50px; text-align: center; color: var(--text-muted); font-size: 12px; padding-bottom: 30px;">
+            &copy; 2024 整体院 導 ｜ AI Posture Analysis System
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('current_password').value;
+            const newPassword = document.getElementById('new_password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            const alertBox = document.getElementById('alertBox');
+
+            if (newPassword !== confirmPassword) {
+                alertBox.textContent = '新しいパスワードが一致しません。';
+                alertBox.className = 'message error';
+                return;
+            }
+
+            try {
+                const response = await fetch('/profile/update_password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alertBox.textContent = 'パスワードを更新しました。';
+                    alertBox.className = 'message success';
+                    document.getElementById('passwordForm').reset();
+                } else {
+                    alertBox.textContent = result.error || '更新に失敗しました。';
+                    alertBox.className = 'message error';
+                }
+            } catch (error) {
+                alertBox.textContent = '通信エラーが発生しました。';
+                alertBox.className = 'message error';
+            }
+        });
+    </script>
+</body>
+</html>
