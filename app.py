@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect, flash
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+import sqlalchemy
+from sqlalchemy import text
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -30,19 +32,21 @@ def init_and_migrate():
     with app.app_context():
         db.create_all()
         # SQLite用の簡易的なカラム追加チェック
-        import sqlalchemy
-        inspector = sqlalchemy.inspect(db.engine)
-        columns = [c['name'] for c in inspector.get_columns('user')]
-        
-        # 不要なカラム追加を避けるためのチェック
-        if 'reset_token' not in columns:
-            try:
-                db.engine.execute('ALTER TABLE user ADD COLUMN reset_token VARCHAR(100)')
-                db.engine.execute('ALTER TABLE user ADD COLUMN reset_token_expiration DATETIME')
+        try:
+            inspector = sqlalchemy.inspect(db.engine)
+            columns = [c['name'] for c in inspector.get_columns('user')]
+            
+            # 不要なカラム追加を避けるためのチェック
+            if 'reset_token' not in columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text('ALTER TABLE user ADD COLUMN reset_token VARCHAR(100)'))
+                    conn.execute(text('ALTER TABLE user ADD COLUMN reset_token_expiration DATETIME'))
+                    conn.commit()
                 print("Database migrated: Added password reset columns.")
-            except Exception as e:
-                # すでにある場合のエラーは無視
-                print(f"Migration notice: {e}")
+        except Exception as e:
+            # ログに出力
+            app.logger.error(f"Migration error: {e}")
+            print(f"Migration notice: {e}")
 
 init_and_migrate()
 
