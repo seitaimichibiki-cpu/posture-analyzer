@@ -192,7 +192,10 @@ class PoseAnalyzer:
             {"name": "骨盤ズレ（正中線）", "normal": 0.0, "measured": pelv_shift_pct, "diff": abs(pelv_shift_pct), "direction": "右偏位" if pelv_shift_pct > 0 else "左偏位", "score": ts_score},
         ]
         panel = build_panel(score_items, risk_msgs, 560, h)
-        return self._save_final_report(img, panel, output_path, "正面")
+        
+        # スマートクロップ適用: 余白を削って人物をクローズアップ
+        img_cropped = self._crop_to_subject(img, lm, w, h)
+        return self._save_final_report(img_cropped, panel, output_path, "正面")
 
     # ── 内部解析ロジック (側面) ──
     def _analyze_side(self, img, lm, w, h, output_path):
@@ -216,12 +219,12 @@ class PoseAnalyzer:
         x_off = int(ref_len * 0.04) * (1 if not facing_right else -1)
         ear_px = (ear_px_orig[0] + x_off, ear_px_orig[1] + y_off)
         shldr_px, hip_px, ankle_px = pxcoord(shldr,w,h), pxcoord(hip,w,h), pxcoord(ankle,w,h)
-
+ 
         fhp_pct = (ear_px[0]/w - shldr.x) * w / ref_len * 100 * (1 if facing_right else -1)
         rs_pct  = (shldr.x - hip.x) * w / ref_len * 100 * (1 if facing_right else -1)
         pel_a   = math.degrees(math.atan2((knee.x-hip.x)*w, (knee.y-hip.y)*h)) * (1 if facing_right else -1)
         trunk_pct = (ear_px[0]/w - ankle.x) * w / ref_len * 100 * (1 if facing_right else -1)
-
+ 
         fhp_sc, rs_sc, pel_sc, trk_sc = [_get_side_score(k, abs(v)/100 if "pct" in k else abs(v)) for k, v in zip(["FHP","ラウンドショルダー","骨盤前後傾","体幹ライン"], [fhp_pct, rs_pct, pel_a, trunk_pct])]
         
         draw_skeleton(img, lm, w, h)
@@ -231,7 +234,7 @@ class PoseAnalyzer:
         for yy in range(ankle_top[1], ankle_px[1], 20):
             cv2.line(img, (ankle_px[0], yy), (ankle_px[0], min(yy+10, ankle_px[1])),
                      MIDLINE_COL_BGR, 2, cv2.LINE_AA)
-
+ 
         pts = [ear_px, shldr_px, hip_px, ankle_px]
         for i in range(len(pts)-1): cv2.line(img, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
         for pt in pts: cv2.circle(img, pt, 6, (200,200,50), -1)
@@ -239,10 +242,10 @@ class PoseAnalyzer:
         # 水平偏差矢印
         def draw_h_diff(p_a, p_b, sc):
             col = SCORE_BGR[sc]; my = (p_a[1]+p_b[1])//2
-            cv2.arrowedLine(img, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.2)
+            cv2.arrowedLine(img, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.25)
             cv2.circle(img, p_a, 7, col, -1); cv2.circle(img, p_b, 7, col, -1)
         draw_h_diff(ear_px, shldr_px, fhp_sc)
-
+ 
         pil_p = cv2pil(img); dp = ImageDraw.Draw(pil_p); fl = get_font(16)
         def s_lbl(pt, txt, sc, dy=-16):
             col = SCORE_RGB[sc]; tx, ty = pt[0]+8, pt[1]+dy
@@ -263,19 +266,53 @@ class PoseAnalyzer:
             {"name":"体幹ライン領域","ideal":"0%","measured":f"{trunk_pct:+.1f}%","diff":f"{abs(trunk_pct):.1f}%","score":trk_sc},
         ]
         panel = build_side_panel(score_items, risk_msgs, 560, h)
-        return self._save_final_report(img, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
+        
+        # スマートクロップ適用: 余白を削って人物をクローズアップ
+        img_cropped = self._crop_to_subject(img, lm, w, h)
+        return self._save_final_report(img_cropped, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
+
+    def _crop_to_subject(self, img, lm, w, h):
+        """人物が写っている範囲を特定し、余白を削ってダイナミックに切り抜く"""
+        # 全身のランドマークの範囲を取得 (頭から足首まで)
+        # 0(鼻), 7,8(耳), 11,12(肩), 23,24(股関節), 27,28(足首)
+        pts = [0, 7, 8, 11, 12, 23, 24, 25, 26, 27, 28]
+        xs = [lm[i].x for i in pts if lm[i].visibility > 0.3]
+        ys = [lm[i].y for i in pts if lm[i].visibility > 0.3]
+        
+        if not xs or not ys: return img
+        
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        
+        # プロフェッショナルなマージン調整 (上下に余裕、横は少し絞る)
+        person_h = max_y - min_y
+        m_top = person_h * 0.15 # 頭の上に少し余裕
+        m_bot = person_h * 0.1  # 足元は少なめ
+        m_side = person_h * 0.1 # 左右
+        
+        # 座標計算 (ピクセル単位)
+        x1 = max(0, int((min_x - m_side) * w))
+        x2 = min(w, int((max_x + m_side) * w))
+        y1 = max(0, int((min_y - m_top) * h))
+        y2 = min(h, int((max_y + m_bot) * h))
+        
+        # 切り抜き (最低限の幅・高さを保証)
+        if (x2 - x1) < 50 or (y2 - y1) < 50: return img
+        return img[y1:y2, x1:x2]
 
     def _save_final_report(self, img, panel, output_path, title_suffix):
-        # 統合
+        # パネルの高さに解析画像を合わせる (アスペクト比を維持しつつ拡大)
         ph = panel.shape[0]
-        if img.shape[0] < ph:
-            pad = np.zeros((ph - img.shape[0], img.shape[1], 3), dtype=np.uint8)
-            pad[:] = (18, 22, 35); img = np.vstack([img, pad])
-        elif panel.shape[0] < img.shape[0]:
-            pad = np.zeros((img.shape[0] - ph, panel.shape[1], 3), dtype=np.uint8)
-            pad[:] = (24, 29, 48); panel = np.vstack([panel, pad])
+        ih, iw = img.shape[:2]
         
-        canvas = np.hstack([img, panel])
+        # 解析画像をパネルの高さに合わせてリサイズ (余白を埋めて拡大)
+        scale = ph / ih
+        new_w = int(iw * scale)
+        img_resized = cv2.resize(img, (new_w, ph), interpolation=cv2.INTER_CUBIC)
+        
+        # 横に連結
+        canvas = np.hstack([img_resized, panel])
+        
         bar_h = 52; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58))
         full_d = ImageDraw.Draw(full_p)
