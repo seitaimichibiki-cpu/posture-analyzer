@@ -5,7 +5,7 @@ from datetime import datetime
 # 設定
 BACKUP_TOKEN = "seitai-backup-2026-safe"
 RENDER_URL = f"https://posture-analyzer-clinic.onrender.com/admin/backup?token={BACKUP_TOKEN}"
-# Obsidianのバックアップ先フォルダ（絶対パス）
+# 2026 会員バックアップ先フォルダ（絶対パス）
 BACKUP_DIR = "/Users/ishikawagai/Desktop/整体院導/姿勢AIバックアップ"
 # ファイル名に日付を入れる（例: members_backup_2024-03-12.md）
 FILENAME = f"members_backup_{datetime.now().strftime('%Y-%m-%d')}.md"
