@@ -22,21 +22,11 @@ def init_db():
             is_admin=True
         )
         
-        # テスト用一般会員アカウントの作成
-        test_user = User(
-            email='test@example.com',
-            password=generate_password_hash('test1234', method='pbkdf2:sha256'),
-            is_active_member=True,
-            is_admin=False
-        )
-
         db.session.add(admin)
-        db.session.add(test_user)
         db.session.commit()
         
         print(f"初期会員データを作成しました:")
         print(f"  [管理者] seitaimichibiki@gmail.com / gai1124714")
-        print(f"  [テスト] test@example.com / test1234")
 
 if __name__ == '__main__':
     init_db()
