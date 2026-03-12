@@ -53,10 +53,11 @@
                 <div class="card result-card">
                     <h2>解析レポート</h2>
                     <div class="report-wrapper">
-                        <img id="resultImage" src="" alt="Analysis Report">
-                    </div>
-                    <div class="result-actions">
-                        <a id="downloadBtn" href="" download class="secondary-btn">💾 画像を保存</a>
+                                <img id="resultImage" src="" alt="Analysis Report">
+                            </div>
+                            <p class="guide-text">※画像を長押しして保存することもできます</p>
+                            <div class="result-actions">
+                                <a id="downloadBtn" href="" download="姿勢解析レポート.jpg" class="secondary-btn">💾 画像を保存</a>
                         <button class="text-btn" onclick="reset()">✨ 別の解析をする</button>
                     </div>
                 </div>
@@ -113,7 +114,9 @@
 
                 if (data.success) {
                     document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
-                    document.getElementById('downloadBtn').href = data.report_url;
+                    const downloadBtn = document.getElementById('downloadBtn');
+                    downloadBtn.href = data.report_url;
+                    downloadBtn.download = `姿勢解析レポート_${new Date().getTime()}.jpg`;
                     document.getElementById('resultSection').style.display = 'block';
                     document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
                 } else {

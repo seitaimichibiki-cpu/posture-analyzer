@@ -248,6 +248,27 @@ button {
     padding: 10px;
 }
 
+.guide-text {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+    .container { padding: 10px; }
+    .card { padding: 16px; }
+    h1 { font-size: 20px; }
+    .report-wrapper {
+        margin-left: -16px;
+        margin-right: -16px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+}
+
 /* iPad Responsive */
 @media (min-width: 768px) {
     .container {
