@@ -100,7 +100,9 @@
             document.getElementById('resultSection').style.display = 'none';
 
             try {
-                const response = await fetch('/analyze', {
+                // クラウド環境（Render）の無料プランは最初の起動に時間がかかるため
+                // 明示的に "/analyze" への相対パスでリクエストを送る
+                const response = await fetch('./analyze', {
                     method: 'POST',
                     body: formData
                 });
