@@ -191,29 +191,51 @@
 
                 // クラウド環境（Render）の無料プランは最初の起動に時間がかかるため
                 // 明示的に "/analyze" への相対パスでリクエストを送る
-                const response = await fetch('./analyze', {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status} ${data.error || ''}`);
+                }
+                handleResult(data);
+            } catch (err) {
+                alert(`解析エラーが発生しました。\n内容: ${err.message}\n\n※サーバーが起動中の可能性があります。数分待ってから「再読み込み」してお試しください。`);
+                console.error(err);
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        async function startComparison() {
+            if (!(fileB && fileA)) return;
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                const resizedBlobB = await resizeImage(fileB, 600);
+                const resizedBlobA = await resizeImage(fileA, 600);
+
+                const formData = new FormData();
+                formData.append('image_b', resizedBlobB, 'before.jpg');
+                formData.append('image_a', resizedBlobA, 'after.jpg');
+                formData.append('view_type', currentView);
+
+                const response = await fetch('/compare', {
                     method: 'POST',
                     body: formData
                 });
                 const data = await response.json();
 
-                if (data.success) {
-                    const filename = data.report_url.split('/').pop();
-                    const reportUrl = data.report_url + '?t=' + Date.now();
-                    document.getElementById('resultImage').src = reportUrl;
-                    
-                    const downloadBtn = document.getElementById('downloadBtn');
-                    // フルURLを生成して確実にダウンロードルートへ飛ばす
-                    const downloadUrl = window.location.origin + '/download/' + filename;
-                    downloadBtn.href = downloadUrl;
-                    
-                    document.getElementById('resultSection').style.display = 'block';
-                    document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    alert('エラー: ' + data.error);
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status} ${data.error || ''}`);
                 }
+                handleResult(data);
             } catch (err) {
-                alert('通信エラーが発生しました。接続を確認するか、しばらく待ってから再度お試しください。');
+                alert(`比較解析エラーが発生しました。\n内容: ${err.message}\n\n※サーバーが起動中の可能性があります。数分待ってから「再読み込み」してお試しください。`);
                 console.error(err);
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
