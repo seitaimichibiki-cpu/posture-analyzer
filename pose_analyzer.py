@@ -161,8 +161,7 @@ class PoseAnalyzer:
         def lbl_near(lm_a, lm_b, text, sc):
             mx, my = int((lm_a.x+lm_b.x)/2*w), int((lm_a.y+lm_b.y)/2*h)-14
             col = SCORE_RGB[sc]; bb = dp.textbbox((0,0), text, font=fl); tw = bb[2]-bb[0]
-            dp.rectangle([(mx-tw//2-4,my-2),(mx+tw//2+4,my+14)], fill=(8,12,25))
-            dp.text((mx-tw//2, my), text, font=fl, fill=col)
+            dp.text((mx-tw//2, my), text, font=fl, fill=col, stroke_width=1, stroke_fill=(10,12,20))
         
         lbl_near(lm[7],  lm[8],  f"頭 {sc_head} {abs(head_a):.1f}°", sc_head)
         lbl_near(lm[11], lm[12], f"肩 {sc_shldr} {abs(shldr_a):.1f}°", sc_shldr)
@@ -250,8 +249,7 @@ class PoseAnalyzer:
         def s_lbl(pt, txt, sc, dy=-16):
             col = SCORE_RGB[sc]; tx, ty = pt[0]+8, pt[1]+dy
             bb = dp.textbbox((0,0),txt,font=fl); tw = bb[2]-bb[0]
-            dp.rectangle([(tx-3,ty-2),(tx+tw+3,ty+14)], fill=(8,12,25))
-            dp.text((tx,ty), txt, font=fl, fill=col)
+            dp.text((tx,ty), txt, font=fl, fill=col, stroke_width=1, stroke_fill=(10,12,20))
         s_lbl(ear_px, f"耳垂 FHP:{abs(fhp_pct):.0f}% {fhp_sc}", fhp_sc)
         s_lbl(shldr_px, f"肩 RS:{abs(rs_pct):.0f}% {rs_sc}", rs_sc)
         s_lbl(hip_px, f"股 骨盤:{abs(pel_a):.1f}° {pel_sc}", pel_sc, dy=4)
