@@ -125,62 +125,62 @@ class PoseAnalyzer:
 
     # ── 内部解析ロジック (正面) ──
     def _analyze_front(self, img, lm, w, h, output_path):
-        draw_skeleton(img, lm, w, h)
+        # 1. 解析（数値計算のみ先に実施）
         head_a   = calc_angle(lm[7],  lm[8],  w, h)
         shldr_a  = calc_angle(lm[11], lm[12], w, h)
         pelvis_a = calc_angle(lm[23], lm[24], w, h)
+        sc_head, sc_shldr, sc_pelvis = get_score("頭部", abs(head_a)), get_score("肩", abs(shldr_a)), get_score("骨盤", abs(pelvis_a))
 
-        sc_head   = get_score("頭部",  abs(head_a))
-        sc_shldr  = get_score("肩",    abs(shldr_a))
-        sc_pelvis = get_score("骨盤",  abs(pelvis_a))
-
-        draw_meas_line(img, pxcoord(lm[7],w,h),  pxcoord(lm[8],w,h),  sc_head)
-        draw_meas_line(img, pxcoord(lm[11],w,h), pxcoord(lm[12],w,h), sc_shldr)
-        draw_meas_line(img, pxcoord(lm[23],w,h), pxcoord(lm[24],w,h), sc_pelvis)
-
-        # 基準点：両足首の中点
         foot_mid_x = (lm[27].x + lm[28].x) / 2
         ear_mid_x, shldr_mid_x, pelv_mid_x = (lm[7].x+lm[8].x)/2, (lm[11].x+lm[12].x)/2, (lm[23].x+lm[24].x)/2
-        
-        # 骨盤幅を基準スケールとする
         pelv_width = max(abs(lm[23].x - lm[24].x), 1e-6)
-        
-        # 足元（正中線）からのズレを算出
-        ear_shift_pct   = (ear_mid_x - foot_mid_x) / pelv_width * 100
-        shldr_shift_pct = (shldr_mid_x - foot_mid_x) / pelv_width * 100
-        pelv_shift_pct  = (pelv_mid_x - foot_mid_x) / pelv_width * 100
-        
-        max_shift_abs   = max(abs(ear_shift_pct), abs(shldr_shift_pct), abs(pelv_shift_pct))
-        ts_score = get_trunk_score(max_shift_abs / 100)
+        ear_shift_pct, shldr_shift_pct, pelv_shift_pct = (ear_mid_x - foot_mid_x) / pelv_width * 100, (shldr_mid_x - foot_mid_x) / pelv_width * 100, (pelv_mid_x - foot_mid_x) / pelv_width * 100
+        ts_score = get_trunk_score(max(abs(ear_shift_pct), abs(shldr_shift_pct), abs(pelv_shift_pct)) / 100)
 
-        draw_midline(img, lm, w, h)
+        # 2. クロップとスケーリング
+        x1, y1, x2, y2 = self._get_crop_box(lm, w, h)
+        img_cropped = img[y1:y2, x1:x2]
         
-        # 写真へのラベル描画
-        pil_photo = cv2pil(img)
-        dp = ImageDraw.Draw(pil_photo); fl = get_font(16)
-        def lbl_near(lm_a, lm_b, text, sc):
-            mx, my = int((lm_a.x+lm_b.x)/2*w), int((lm_a.y+lm_b.y)/2*h)-14
-            col = SCORE_RGB[sc]; bb = dp.textbbox((0,0), text, font=fl); tw = bb[2]-bb[0]
-            dp.text((mx-tw//2, my), text, font=fl, fill=col, stroke_width=1, stroke_fill=(10,12,20))
-        
-        lbl_near(lm[7],  lm[8],  f"頭 {sc_head} {abs(head_a):.1f}°", sc_head)
-        lbl_near(lm[11], lm[12], f"肩 {sc_shldr} {abs(shldr_a):.1f}°", sc_shldr)
-        lbl_near(lm[23], lm[24], f"盤 {sc_pelvis} {abs(pelvis_a):.1f}°", sc_pelvis)
-        
-        # 正中線ラベルと偏位
-        lx = int(foot_mid_x*w)
-        foot_py = h - 20 # 足元ラベル位置
-        dp.text((lx+6, foot_py-15), "正中線", font=get_font(11), fill=MIDLINE_COL_RGB)
-        
-        for mid_x, lm_y, text in [
+        # パネルの高さ（1400px相当）に合わせてリサイズ
+        target_ph = 1400 # 診断パネルの標準的な高さ
+        scale = target_ph / img_cropped.shape[0]
+        img_final = cv2.resize(img_cropped, (int(img_cropped.shape[1] * scale), target_ph), interpolation=cv2.INTER_CUBIC)
+        fw, fh = img_final.shape[1], img_final.shape[0]
+
+        # 3. 描画（リサイズ済みの最終画像に対して実施）
+        draw_skeleton_zoom(img_final, lm, w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_final, lm[7],  lm[8],  sc_head,   w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_final, lm[11], lm[12], sc_shldr,  w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_final, lm[23], lm[24], sc_pelvis, w, h, x1, y1, scale)
+        draw_midline_zoom(img_final, lm, w, h, x1, y1, scale)
+
+        # 4. ラベル描画（はみ出し防止付き）
+        pil_photo = cv2pil(img_final); dp = ImageDraw.Draw(pil_photo); fl = get_font(20); fl_s = get_font(16)
+        def lbl_zoom(lm_a, lm_b, text, sc):
+            p1 = px_zoom(lm_a, w, h, x1, y1, scale); p2 = px_zoom(lm_b, w, h, x1, y1, scale)
+            mx, my = (p1[0]+p2[0])//2, (p1[1]+p2[1])//2 - 25
+            col = SCORE_RGB[sc]; bb = dp.textbbox((0,0), text, font=fl); tw = bb[2]-bb[0]; th = bb[3]-bb[1]
+            # はみ出し防止 (X座標)
+            draw_x = max(10, min(mx - tw//2, fw - tw - 10))
+            dp.text((draw_x, my), text, font=fl, fill=col, stroke_width=2, stroke_fill=(10,12,20))
+
+        lbl_zoom(lm[7],  lm[8],  f"頭部 {sc_head} {abs(head_a):.1f}°", sc_head)
+        lbl_zoom(lm[11], lm[12], f"肩ライン {sc_shldr} {abs(shldr_a):.1f}°", sc_shldr)
+        lbl_zoom(lm[23], lm[24], f"骨盤ライン {sc_pelvis} {abs(pelvis_a):.1f}°", sc_pelvis)
+
+        # 正中線偏差ラベル
+        lx = int(((lm[27].x + lm[28].x) / 2 * w - x1) * scale)
+        for ml_x, ml_y, text in [
             (ear_mid_x, lm[7].y, f"{'←' if (ear_mid_x-foot_mid_x)<0 else ''}{abs(ear_shift_pct):.1f}%{'→' if (ear_mid_x-foot_mid_x)>=0 else ''}"),
             (shldr_mid_x, lm[11].y, f"{'←' if (shldr_mid_x-foot_mid_x)<0 else ''}{abs(shldr_shift_pct):.1f}%{'→' if (shldr_mid_x-foot_mid_x)>=0 else ''}"),
             (pelv_mid_x, lm[23].y, f"{'←' if (pelv_mid_x-foot_mid_x)<0 else ''}{abs(pelv_shift_pct):.1f}%{'→' if (pelv_mid_x-foot_mid_x)>=0 else ''}")
         ]:
-            px, py = int(mid_x*w), int(lm_y*h)
-            dp.text((px+8, py-4), text, font=get_font(14), fill=MIDLINE_COL_RGB)
-        
-        img = pil2cv2(np.array(pil_photo))
+            px, py = int((ml_x*w - x1)*scale), int((ml_y*h - y1)*scale)
+            # はみ出し防止
+            draw_x = max(10, min(px + 10, fw - 80))
+            dp.text((draw_x, py - 5), text, font=fl_s, fill=MIDLINE_COL_RGB, stroke_width=1, stroke_fill=(10,12,20))
+
+        img_final = pil2cv2(np.array(pil_photo))
         risk_msgs = calc_body_risks(sc_head, sc_shldr, sc_pelvis, ts_score, shldr_a, pelvis_a)
         score_items = [
             {"name": "頭部（耳の傾き）", "normal": 0.0, "measured": head_a, "diff": abs(head_a), "direction": direction(head_a), "score": sc_head},
@@ -190,72 +190,77 @@ class PoseAnalyzer:
             {"name": "肩部ズレ（正中線）", "normal": 0.0, "measured": shldr_shift_pct, "diff": abs(shldr_shift_pct), "direction": "右偏位" if shldr_shift_pct > 0 else "左偏位", "score": ts_score},
             {"name": "骨盤ズレ（正中線）", "normal": 0.0, "measured": pelv_shift_pct, "diff": abs(pelv_shift_pct), "direction": "右偏位" if pelv_shift_pct > 0 else "左偏位", "score": ts_score},
         ]
-        panel = build_panel(score_items, risk_msgs, 560, h)
-        
-        # スマートクロップ適用: 余白を削って人物をクローズアップ
-        img_cropped = self._crop_to_subject(img, lm, w, h)
-        return self._save_final_report(img_cropped, panel, output_path, "正面")
+        panel = build_panel(score_items, risk_msgs, 560, fh)
+        return self._save_final_report(img_final, panel, output_path, "正面")
 
     # ── 内部解析ロジック (側面) ──
     def _analyze_side(self, img, lm, w, h, output_path):
-        # 向き判定の改善: 口の中点が耳の中点より右なら右向き
-        mouth_x = (lm[9].x + lm[10].x) / 2
-        ear_avg_x = (lm[7].x + lm[8].x) / 2
+        # 1. 解析（数値計算のみ先に実施）
+        mouth_x, ear_avg_x = (lm[9].x + lm[10].x) / 2, (lm[7].x + lm[8].x) / 2
         facing_right = mouth_x > ear_avg_x
-        
-        # 側面では、鼻からX軸上で最も遠い（後方にある）方の耳を「可視耳」として選択する
-        # これにより、横を向いた際に顔の内側に予測された誤ったランドマークを回避できる
         idx_ear = 7 if abs(lm[7].x - lm[0].x) > abs(lm[8].x - lm[0].x) else 8
-            
-        # 選択した耳に合わせて他の指標セット（肩、腰、膝、足首）を定義
         idx = [idx_ear, 12, 24, 26, 28] if idx_ear == 8 else [idx_ear, 11, 23, 25, 27]
         ear, shldr, hip, knee, ankle = [lm[i] for i in idx]
-        
         ref_len = max(abs(shldr.y - hip.y) * h, 1)
-        ear_px_orig = pxcoord(ear,w,h)
-        # 耳垂（耳たぶ）の位置に調整: もみあげを避け、確実に耳たぶの位置へ移動
-        y_off = int(ref_len * 0.07)
-        x_off = int(ref_len * 0.04) * (1 if not facing_right else -1)
-        ear_px = (ear_px_orig[0] + x_off, ear_px_orig[1] + y_off)
-        shldr_px, hip_px, ankle_px = pxcoord(shldr,w,h), pxcoord(hip,w,h), pxcoord(ankle,w,h)
- 
-        fhp_pct = (ear_px[0]/w - shldr.x) * w / ref_len * 100 * (1 if facing_right else -1)
+
+        y_off = int(ref_len * 0.07); x_off = int(ref_len * 0.04) * (1 if not facing_right else -1)
+        # 座標計算用の中間点（スケーリング前）
+        ear_px_orig = (int(ear.x*w + x_off), int(ear.y*h + y_off))
+        shldr_px_orig, hip_px_orig, ankle_px_orig = pxcoord(shldr,w,h), pxcoord(hip,w,h), pxcoord(ankle,w,h)
+
+        fhp_pct = (ear_px_orig[0]/w - shldr.x) * w / ref_len * 100 * (1 if facing_right else -1)
         rs_pct  = (shldr.x - hip.x) * w / ref_len * 100 * (1 if facing_right else -1)
         pel_a   = math.degrees(math.atan2((knee.x-hip.x)*w, (knee.y-hip.y)*h)) * (1 if facing_right else -1)
-        trunk_pct = (ear_px[0]/w - ankle.x) * w / ref_len * 100 * (1 if facing_right else -1)
- 
+        trunk_pct = (ear_px_orig[0]/w - ankle.x) * w / ref_len * 100 * (1 if facing_right else -1)
         fhp_sc, rs_sc, pel_sc, trk_sc = [_get_side_score(k, abs(v)/100 if "pct" in k else abs(v)) for k, v in zip(["FHP","ラウンドショルダー","骨盤前後傾","体幹ライン"], [fhp_pct, rs_pct, pel_a, trunk_pct])]
+
+        # 2. クロップとスケーリング
+        x1, y1, x2, y2 = self._get_crop_box(lm, w, h)
+        img_cropped = img[y1:y2, x1:x2]
+        target_ph = 1400
+        scale = target_ph / img_cropped.shape[0]
+        img_final = cv2.resize(img_cropped, (int(img_cropped.shape[1] * scale), target_ph), interpolation=cv2.INTER_CUBIC)
+        fw, fh = img_final.shape[1], img_final.shape[0]
+
+        # 3. 描画
+        draw_skeleton_zoom(img_final, lm, w, h, x1, y1, scale)
+        # 重心線
+        ankle_px = px_zoom(ankle, w, h, x1, y1, scale)
+        ear_px = (int((ear_px_orig[0]-x1)*scale), int((ear_px_orig[1]-y1)*scale))
+        shldr_px = px_zoom(shldr, w, h, x1, y1, scale)
+        hip_px = px_zoom(hip, w, h, x1, y1, scale)
         
-        draw_skeleton(img, lm, w, h)
+        ankle_top_y = max(ear_px[1] - 50, 20)
+        for yy in range(ankle_top_y, ankle_px[1], 25):
+            cv2.line(img_final, (ankle_px[0], yy), (ankle_px[0], min(yy+12, ankle_px[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
         
-        # 垂直基準線（重心線）を描画: 足首から垂直に伸ばす
-        ankle_top = (ankle_px[0], max(ear_px[1] - 20, 5))
-        for yy in range(ankle_top[1], ankle_px[1], 20):
-            cv2.line(img, (ankle_px[0], yy), (ankle_px[0], min(yy+10, ankle_px[1])),
-                     MIDLINE_COL_BGR, 2, cv2.LINE_AA)
- 
         pts = [ear_px, shldr_px, hip_px, ankle_px]
-        for i in range(len(pts)-1): cv2.line(img, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
-        for pt in pts: cv2.circle(img, pt, 6, (200,200,50), -1)
-        
+        for i in range(len(pts)-1): cv2.line(img_final, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
+        for pt in pts: cv2.circle(img_final, pt, 7, (200,200,50), -1)
+
         # 水平偏差矢印
-        def draw_h_diff(p_a, p_b, sc):
+        def draw_h_diff_zoom(p_a, p_b, sc):
             col = SCORE_BGR[sc]; my = (p_a[1]+p_b[1])//2
-            cv2.arrowedLine(img, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.25)
-            cv2.circle(img, p_a, 7, col, -1); cv2.circle(img, p_b, 7, col, -1)
-        draw_h_diff(ear_px, shldr_px, fhp_sc)
- 
-        pil_p = cv2pil(img); dp = ImageDraw.Draw(pil_p); fl = get_font(16)
-        def s_lbl(pt, txt, sc, dy=-16):
-            col = SCORE_RGB[sc]; tx, ty = pt[0]+8, pt[1]+dy
+            cv2.arrowedLine(img_final, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.2)
+            cv2.circle(img_final, p_a, 7, col, -1); cv2.circle(img_final, p_b, 7, col, -1)
+        draw_h_diff_zoom(ear_px, shldr_px, fhp_sc)
+
+        # 4. ラベル描画（はみ出し防止）
+        pil_p = cv2pil(img_final); dp = ImageDraw.Draw(pil_p); fl = get_font(20)
+        def s_lbl_zoom(pt, txt, sc, dy=-25):
+            col = SCORE_RGB[sc]; tx, ty = pt[0]+12, pt[1]+dy
             bb = dp.textbbox((0,0),txt,font=fl); tw = bb[2]-bb[0]
-            dp.text((tx,ty), txt, font=fl, fill=col, stroke_width=1, stroke_fill=(10,12,20))
-        s_lbl(ear_px, f"耳垂 FHP:{abs(fhp_pct):.0f}% {fhp_sc}", fhp_sc)
-        s_lbl(shldr_px, f"肩 RS:{abs(rs_pct):.0f}% {rs_sc}", rs_sc)
-        s_lbl(hip_px, f"股 骨盤:{abs(pel_a):.1f}° {pel_sc}", pel_sc, dy=4)
-        s_lbl(ankle_px, f"足 体幹:{abs(trunk_pct):.0f}% {trk_sc}", trk_sc, dy=4)
+            # はみ出し防止 (左右)
+            draw_x = tx if tx + tw < fw - 10 else pt[0] - tw - 12
+            draw_x = max(10, min(draw_x, fw - tw - 10))
+            dp.text((draw_x, ty), txt, font=fl, fill=col, stroke_width=2, stroke_fill=(10,12,20))
+
+        s_lbl_zoom(ear_px, f"耳垂 FHP:{abs(fhp_pct):.0f}% {fhp_sc}", fhp_sc)
+        s_lbl_zoom(shldr_px, f"肩 RS:{abs(rs_pct):.0f}% {rs_sc}", rs_sc)
+        s_lbl_zoom(hip_px, f"股 骨盤:{abs(pel_a):.1f}° {pel_sc}", pel_sc, dy=5)
+        s_lbl_zoom(ankle_px, f"足 体幹:{abs(trunk_pct):.0f}% {trk_sc}", trk_sc, dy=5)
         
-        img = pil2cv2(np.array(pil_p))
+        img_final = pil2cv2(np.array(pil_p))
         risk_msgs = calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, abs(fhp_pct), abs(rs_pct))
         score_items = [
             {"name":"前方頭位(FHP)","ideal":"0%","measured":f"{fhp_pct:+.1f}%","diff":f"{abs(fhp_pct):.1f}%","score":fhp_sc},
@@ -263,54 +268,24 @@ class PoseAnalyzer:
             {"name":"骨盤前後傾","ideal":"0°","measured":f"{pel_a:+.1f}°","diff":f"{abs(pel_a):.1f}°","score":pel_sc},
             {"name":"体幹ライン領域","ideal":"0%","measured":f"{trunk_pct:+.1f}%","diff":f"{abs(trunk_pct):.1f}%","score":trk_sc},
         ]
-        panel = build_side_panel(score_items, risk_msgs, 560, h)
-        
-        # スマートクロップ適用: 余白を削って人物をクローズアップ
-        img_cropped = self._crop_to_subject(img, lm, w, h)
-        return self._save_final_report(img_cropped, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
+        panel = build_side_panel(score_items, risk_msgs, 560, fh)
+        return self._save_final_report(img_final, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
 
-    def _crop_to_subject(self, img, lm, w, h):
-        """人物が写っている範囲を特定し、余白を削ってダイナミックに切り抜く"""
-        # 全身のランドマークの範囲を取得 (頭から足首まで)
-        # 0(鼻), 7,8(耳), 11,12(肩), 23,24(股関節), 27,28(足首)
+    def _get_crop_box(self, lm, w, h):
+        """人物の存在範囲から切り抜き範囲(x1, y1, x2, y2)を計算する"""
         pts = [0, 7, 8, 11, 12, 23, 24, 25, 26, 27, 28]
         xs = [lm[i].x for i in pts if lm[i].visibility > 0.3]
         ys = [lm[i].y for i in pts if lm[i].visibility > 0.3]
-        
-        if not xs or not ys: return img
-        
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        
-        # プロフェッショナルなマージン調整 (上下に余裕、横は少し絞る)
+        if not xs or not ys: return 0, 0, w, h
+        min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
         person_h = max_y - min_y
-        m_top = person_h * 0.15 # 頭の上に少し余裕
-        m_bot = person_h * 0.1  # 足元は少なめ
-        m_side = person_h * 0.1 # 左右
-        
-        # 座標計算 (ピクセル単位)
-        x1 = max(0, int((min_x - m_side) * w))
-        x2 = min(w, int((max_x + m_side) * w))
-        y1 = max(0, int((min_y - m_top) * h))
-        y2 = min(h, int((max_y + m_bot) * h))
-        
-        # 切り抜き (最低限の幅・高さを保証)
-        if (x2 - x1) < 50 or (y2 - y1) < 50: return img
-        return img[y1:y2, x1:x2]
+        m_top, m_bot, m_side = person_h * 0.15, person_h * 0.1, person_h * 0.1
+        return (max(0, int((min_x - m_side) * w)), max(0, int((min_y - m_top) * h)),
+                min(w, int((max_x + m_side) * w)), min(h, int((max_y + m_bot) * h)))
 
     def _save_final_report(self, img, panel, output_path, title_suffix):
-        # パネルの高さに解析画像を合わせる (アスペクト比を維持しつつ拡大)
-        ph = panel.shape[0]
-        ih, iw = img.shape[:2]
-        
-        # 解析画像をパネルの高さに合わせてリサイズ (余白を埋めて拡大)
-        scale = ph / ih
-        new_w = int(iw * scale)
-        img_resized = cv2.resize(img, (new_w, ph), interpolation=cv2.INTER_CUBIC)
-        
-        # 横に連結
-        canvas = np.hstack([img_resized, panel])
-        
+        # 描画済みのimgとpanelを連結して保存
+        canvas = np.hstack([img, panel])
         bar_h = 52; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58))
         full_d = ImageDraw.Draw(full_p)
@@ -368,38 +343,49 @@ def draw_text_center(draw, cx, y, text, font, color):
     draw.text((cx - tw // 2, y), text, font=font, fill=color, stroke_width=1, stroke_fill=color)
 
 CONNECTIONS = [(0,1),(1,2),(2,3),(3,7),(0,4),(4,5),(5,6),(6,8),(9,10),(11,12),(11,13),(13,15),(12,14),(14,16),(11,23),(12,24),(23,24),(23,25),(25,27),(24,26),(26,28)]
-def draw_skeleton(img, lm, w, h):
+def px_zoom(lm, w, h, x1, y1, scale):
+    """ズーム・クロップ後の座標に変換する"""
+    return (int((lm.x * w - x1) * scale), int((lm.y * h - y1) * scale))
+
+def draw_skeleton_zoom(img, lm, w, h, x1, y1, scale):
     for s, e in CONNECTIONS:
         if lm[s].visibility > 0.3 and lm[e].visibility > 0.3:
-            cv2.line(img, pxcoord(lm[s],w,h), pxcoord(lm[e],w,h), (150,150,150), 1, cv2.LINE_AA)
-    for l in lm: cv2.circle(img, (int(l.x*w), int(l.y*h)), 3, (80,230,120), -1)
+            p1 = px_zoom(lm[s], w, h, x1, y1, scale)
+            p2 = px_zoom(lm[e], w, h, x1, y1, scale)
+            cv2.line(img, p1, p2, (150,150,150), 1, cv2.LINE_AA)
+    for l in lm:
+        cv2.circle(img, px_zoom(l, w, h, x1, y1, scale), 3, (80,230,120), -1)
 
-def draw_meas_line(img, p1, p2, sc):
-    c = SCORE_BGR[sc]; cv2.line(img, p1, p2, c, 3, cv2.LINE_AA); cv2.circle(img, p1, 7, c, -1); cv2.circle(img, p2, 7, c, -1)
+def draw_meas_line_zoom(img, lm1, lm2, sc, w, h, x1, y1, scale):
+    c = SCORE_BGR[sc]
+    p1 = px_zoom(lm1, w, h, x1, y1, scale)
+    p2 = px_zoom(lm2, w, h, x1, y1, scale)
+    # 線を細く（2px）に変更して精密感を出す
+    cv2.line(img, p1, p2, c, 2, cv2.LINE_AA)
+    cv2.circle(img, p1, 6, c, -1); cv2.circle(img, p2, 6, c, -1)
 
-def draw_midline(img, lm, w, h):
-    # 正面正中線の下端：左右の足首(27, 28)の中点
-    lx = int((lm[27].x + lm[28].x) / 2 * w)
+def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
+    lx_orig = (lm[27].x + lm[28].x) / 2 * w
+    lx = int((lx_orig - x1) * scale)
+    py_top = int((lm[0].y * h - h * 0.1 - y1) * scale)
+    py_bot = int((max(lm[27].y, lm[28].y) * h + h * 0.02 - y1) * scale)
+    ih = img.shape[0]
+    for y in range(max(py_top, 10), min(py_bot, ih), 20):
+        cv2.line(img, (lx, y), (lx, min(y+10, py_bot)), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
     
-    # 描画範囲：頭頂部付近から足元まで
-    py_top = int(lm[0].y * h - h * 0.1)
-    py_bot = int(max(lm[27].y, lm[28].y) * h + h * 0.02)
-    
-    # 点線の描画
-    for y in range(max(py_top, 10), py_bot, 16):
-        cv2.line(img, (lx, y), (lx, min(y+8, py_bot)), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
-    
-    # 指標ポイント（頭部中点、肩中点、骨盤中点、足元中点）の描画と矢印
+    pts_lm = [lm[0], lm[11], lm[23], lm[27]] # 適当な代表点
+    # 現実に即してランドマーク中点を計算
     pts = [
-        midpoint(pxcoord(lm[7],w,h),  pxcoord(lm[8],w,h)),
-        midpoint(pxcoord(lm[11],w,h), pxcoord(lm[12],w,h)),
-        midpoint(pxcoord(lm[23],w,h), pxcoord(lm[24],w,h)),
-        (lx, int(max(lm[27].y, lm[28].y)*h))
+        midpoint(px_zoom(lm[7],w,h,x1,y1,scale),  px_zoom(lm[8],w,h,x1,y1,scale)),
+        midpoint(px_zoom(lm[11],w,h,x1,y1,scale), px_zoom(lm[12],w,h,x1,y1,scale)),
+        midpoint(px_zoom(lm[23],w,h,x1,y1,scale), px_zoom(lm[24],w,h,x1,y1,scale)),
+        (lx, int((max(lm[27].y, lm[28].y)*h - y1)*scale))
     ]
     for pt in pts:
-        cv2.circle(img, pt, 6, MIDLINE_COL_BGR, -1); cv2.circle(img, pt, 8, (255, 255, 255), 1)
+        cv2.circle(img, pt, 6, MIDLINE_COL_BGR, -1)
+        cv2.circle(img, pt, 8, (255, 255, 255), 1)
         if pt[0] != lx:
-            cv2.arrowedLine(img, (lx, pt[1]), (pt[0], pt[1]), MIDLINE_COL_BGR, 2, cv2.LINE_AA, tipLength=0.25)
+            cv2.arrowedLine(img, (lx, pt[1]), (pt[0], pt[1]), MIDLINE_COL_BGR, 2, cv2.LINE_AA, tipLength=0.2)
 
 def calc_body_risks(sc_h, sc_s, sc_p, ts_sc, s_a, p_a):
     pd = "右側" if p_a >= 0 else "左側"; sd = "右肩" if s_a >= 0 else "左肩"
