@@ -184,14 +184,19 @@ button {
 
 /* Comparison Mode Layout */
 .comparison-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
     margin-bottom: 20px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .comp-card {
-    padding: 12px !important;
+    padding: 8px !important;
+    min-width: 0; /* グリッドアイテムのはみ出し防止 */
+    display: flex;
+    flex-direction: column;
 }
 
 .comp-label {
@@ -204,15 +209,21 @@ button {
 }
 
 .preview-area.small {
-    height: 160px;
-    min-height: 160px;
+    height: 180px !important;
+    min-height: 180px !important;
+    max-height: 180px !important;
     margin-bottom: 0;
     border-style: solid;
     background: #060912;
+    overflow: hidden;
+}
+
+.preview-area.small .default-msg {
+    transform: scale(0.8);
 }
 
 .preview-area.small .icon {
-    font-size: 24px;
+    font-size: 20px;
 }
 
 /* Loading Overlay */
