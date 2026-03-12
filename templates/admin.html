@@ -20,22 +20,38 @@
             border-bottom: 1px solid var(--border);
         }
         .status-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
             font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .status-active { background: rgba(0, 200, 83, 0.2); color: var(--success); }
-        .status-inactive { background: rgba(255, 71, 87, 0.2); color: #ff4757; }
+        .status-active { 
+            background: rgba(0, 200, 83, 0.15); 
+            color: #00c853; 
+            border: 1px solid rgba(0, 200, 83, 0.3);
+        }
+        .status-inactive { 
+            background: rgba(255, 71, 87, 0.15); 
+            color: #ff4757; 
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
         
         .toggle-btn {
-            background: var(--accent);
+            background: var(--primary);
             border: none;
             color: white;
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .toggle-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
         }
         .toggle-btn.btn-off {
             background: #4a5578;
@@ -53,7 +69,18 @@
             </div>
         </header>
 
+        <main class="card" style="margin-bottom: 30px;">
+            <h2 style="margin-bottom: 15px; font-size: 1.2em;">新規会員登録</h2>
+            <div id="register-message" style="margin-bottom: 15px; display: none; padding: 10px; border-radius: 6px; font-size: 14px;"></div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="email" id="reg-email" placeholder="メールアドレス" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="password" id="reg-password" placeholder="パスワード" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                <button onclick="registerUser()" class="btn" style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">登録する</button>
+            </div>
+        </main>
+
         <main class="card">
+            <h2 style="margin-bottom: 15px; font-size: 1.2em;">会員一覧</h2>
             <table class="admin-table">
                 <thead>
                     <tr>
@@ -72,21 +99,17 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if user.is_active_member %}
-                            <span class="status status-active">利用中</span>
-                            {% else %}
-                            <span class="status status-inactive">停止中</span>
-                            {% endif %}
+                            <span id="status-{{ user.id }}" class="status-badge {% if user.is_active_member %}status-active{% else %}status-inactive{% endif %}">
+                                {% if user.is_active_member %}契約中{% else %}未契約{% endif %}
+                            </span>
                         </td>
                         <td>
                             {% if user.id == current_user.id %}
-                            <button class="btn btn-toggle" disabled title="自身の権限は変更できません">操作不可</button>
+                            <button class="toggle-btn" disabled style="opacity: 0.5; cursor: not-allowed;">操作不可</button>
                             {% else %}
-                            <form action="{{ url_for('admin_toggle_user', user_id=user.id) }}" method="POST" style="display:inline;">
-                                <button type="submit" class="btn btn-toggle">
-                                    {% if user.is_active_member %}停止する{% else %}許可する{% endif %}
-                                </button>
-                            </form>
+                            <button id="btn-{{ user.id }}" onclick="toggleUser({{ user.id }})" class="toggle-btn {% if not user.is_active_member %}btn-off{% endif %}">
+                                {% if user.is_active_member %}停止する{% else %}許可する{% endif %}
+                            </button>
                             {% endif %}
                         </td>
                     </tr>
@@ -97,11 +120,51 @@
     </div>
 
     <script>
+        function showMessage(text, isError = false) {
+            const msgEl = document.getElementById('register-message');
+            msgEl.textContent = text;
+            msgEl.style.display = 'block';
+            msgEl.style.backgroundColor = isError ? 'rgba(255, 71, 87, 0.1)' : 'rgba(0, 200, 83, 0.1)';
+            msgEl.style.color = isError ? '#ff4757' : '#00c853';
+            msgEl.style.border = `1px solid ${isError ? '#ff4757' : '#00c853'}`;
+        }
+
+        async function registerUser() {
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            
+            if (!email || !password) {
+                showMessage('メールアドレスとパスワードを入力してください。', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('ユーザーを登録しました。ページを更新して一覧を確認してください。');
+                    document.getElementById('reg-email').value = '';
+                    document.getElementById('reg-password').value = '';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showMessage(data.error || '登録に失敗しました。', true);
+                }
+            } catch (err) {
+                showMessage('通信エラーが発生しました。', true);
+            }
+        }
+
         async function toggleUser(userId) {
             const btn = document.getElementById(`btn-${userId}`);
             const badge = document.getElementById(`status-${userId}`);
             
             btn.disabled = true;
+            btn.style.opacity = '0.5';
             
             try {
                 const response = await fetch(`/admin/toggle/${userId}`, { method: 'POST' });
@@ -118,6 +181,7 @@
                 alert('エラーが発生しました。');
             } finally {
                 btn.disabled = false;
+                btn.style.opacity = '1';
             }
         }
     </script>

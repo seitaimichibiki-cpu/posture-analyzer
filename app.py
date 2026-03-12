@@ -111,13 +111,41 @@ def admin():
 
 @app.route('/admin/toggle/<int:user_id>', methods=['POST'])
 @login_required
-def toggle_user(user_id):
+def admin_toggle_user(user_id):
     if not current_user.is_admin:
         return jsonify({'success': False}), 403
     user = User.query.get_or_404(user_id)
     user.is_active_member = not user.is_active_member
     db.session.commit()
     return jsonify({'success': True, 'new_status': user.is_active_member})
+
+@app.route('/admin/register', methods=['POST'])
+@login_required
+def admin_register_user():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'error': '権限がありません。'}), 403
+    
+    data = request.json
+    email = data.get('email', '').strip()
+    password = data.get('password', '').strip()
+    
+    if not email or not password:
+        return jsonify({'success': False, 'error': 'メールアドレスとパスワードを入力してください。'}), 400
+    
+    if User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'error': 'このメールアドレスは既に登録されています。'}), 400
+    
+    new_user = User(
+        email=email,
+        password=generate_password_hash(password),
+        is_active_member=True,
+        is_admin=False
+    )
+    
+    db.session.add(new_user)
+    db.session.commit()
+    
+    return jsonify({'success': True})
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
