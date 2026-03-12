@@ -18,8 +18,14 @@ MODEL_PATH = os.path.join(BASE_DIR, 'pose_landmarker_lite.task')
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# エンジンのシングルトン初期化
-analyzer = PoseAnalyzer(MODEL_PATH)
+# エンジンの遅延初期化用
+_analyzer = None
+
+def get_analyzer():
+    global _analyzer
+    if _analyzer is None:
+        _analyzer = PoseAnalyzer(MODEL_PATH)
+    return _analyzer
 
 @app.route('/')
 def index():
@@ -46,7 +52,7 @@ def analyze():
 
     try:
         # 新しいクラスベースの解析実行
-        success = analyzer.analyze(input_path, output_path, view_type=view_type)
+        success = get_analyzer().analyze(input_path, output_path, view_type=view_type)
 
         if success:
             return jsonify({
