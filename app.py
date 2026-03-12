@@ -148,10 +148,14 @@ def admin_register_user():
     return jsonify({'success': True})
 
 @app.route('/admin/backup')
-@login_required
 def admin_backup():
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'error': '権限がありません。'}), 403
+    # トークンによる認証またはログイン済み管理者のみ
+    token = request.args.get('token')
+    expected_token = "seitai-backup-2026-safe" # 簡易的なトークン
+    
+    if token != expected_token:
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return jsonify({'success': False, 'error': '権限がありません。'}), 403
     
     users = User.query.all()
     
