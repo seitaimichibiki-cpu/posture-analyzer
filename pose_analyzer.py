@@ -81,7 +81,7 @@ class PoseAnalyzer:
 
         # 1. リサイズ（標準化）
         orig_h, orig_w = img.shape[:2]
-        target_h = 1400
+        target_h = 1200
         target_w = int(orig_w * (target_h / orig_h))
         # 高品質補間
         img = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_CUBIC)

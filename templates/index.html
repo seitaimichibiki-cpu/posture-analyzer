@@ -92,14 +92,17 @@
         async function startAnalysis() {
             if (!selectedFile) return;
 
-            const formData = new FormData();
-            formData.append('image', selectedFile);
-            formData.append('view_type', currentView);
-
             document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('resultSection').style.display = 'none';
 
             try {
+                // --- クライアント側でリサイズ処理 (メモリ節約のため) ---
+                const resizedBlob = await resizeImage(selectedFile, 1200);
+                
+                const formData = new FormData();
+                formData.append('image', resizedBlob, 'upload.jpg');
+                formData.append('view_type', currentView);
+
                 // クラウド環境（Render）の無料プランは最初の起動に時間がかかるため
                 // 明示的に "/analyze" への相対パスでリクエストを送る
                 const response = await fetch('./analyze', {
@@ -117,11 +120,40 @@
                     alert('エラー: ' + data.error);
                 }
             } catch (err) {
-                alert('通信エラーが発生しました');
+                alert('通信エラーが発生しました。接続を確認するか、しばらく待ってから再度お試しください。');
                 console.error(err);
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
             }
+        }
+
+        // 画像をリサイズするユーティリティ関数
+        function resizeImage(file, maxSide) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > h && w > maxSide) {
+                            h = (h * maxSide) / w;
+                            w = maxSide;
+                        } else if (h > maxSide) {
+                            w = (w * maxSide) / h;
+                            h = maxSide;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         function reset() {

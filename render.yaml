@@ -3,7 +3,7 @@ services:
     name: posture-analyzer
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 120
+    startCommand: gunicorn app:app --workers 1 --timeout 120
     envVars:
       - key: PORT
         value: 10000
