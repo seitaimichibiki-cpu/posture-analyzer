@@ -97,7 +97,7 @@
 
             try {
                 // --- クライアント側でリサイズ処理 (メモリ節約のため) ---
-                const resizedBlob = await resizeImage(selectedFile, 800);
+                const resizedBlob = await resizeImage(selectedFile, 600);
                 
                 const formData = new FormData();
                 formData.append('image', resizedBlob, 'upload.jpg');

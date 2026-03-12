@@ -13,7 +13,7 @@ CORS(app)
 # 設定
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static/uploads')
-MODEL_PATH = os.path.join(BASE_DIR, 'pose_landmarker.task')
+MODEL_PATH = os.path.join(BASE_DIR, 'pose_landmarker_lite.task')
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
