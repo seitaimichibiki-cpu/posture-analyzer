@@ -45,7 +45,15 @@ def init_and_migrate():
                     conn.commit()
                 print("Database migrated: Added password reset columns.")
             else:
-                print("Database already up to date.")
+                print("Database already up to date (reset token).")
+            
+            # ログイン試行制限用のカラム追加
+            if 'failed_login_attempts' not in columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text('ALTER TABLE user ADD COLUMN failed_login_attempts INTEGER DEFAULT 0'))
+                    conn.execute(text('ALTER TABLE user ADD COLUMN locked_until DATETIME'))
+                    conn.commit()
+                print("Database migrated: Added login attempt limiting columns.")
         except Exception as e:
             # ログに出力
             app.logger.error(f"Migration error: {e}")
@@ -61,6 +69,9 @@ class User(UserMixin, db.Model):
     # パスワードリセット用
     reset_token = db.Column(db.String(100), unique=True, nullable=True)
     reset_token_expiration = db.Column(db.DateTime, nullable=True)
+    # ログイン試行制限用
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
 
 class AnalysisLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -121,15 +132,34 @@ def login():
         user = User.query.filter_by(email=email).first()
         
         if user:
+            # ロック状態のチェック
+            if user.locked_until and user.locked_until > datetime.utcnow():
+                wait_mins = int((user.locked_until - datetime.utcnow()).total_seconds() / 60) + 1
+                return jsonify({'success': False, 'error': f'アカウントがロックされています。あと{wait_mins}分後に再試行してください。'}), 403
+
             if check_password_hash(user.password, password):
+                # 成功時は失敗カウントをリセット
+                user.failed_login_attempts = 0
+                user.locked_until = None
+                db.session.commit()
                 login_user(user)
                 return jsonify({'success': True})
             else:
-                print(f"Login failed: Password mismatch for {email}")
+                # 失敗時はカウントアップ
+                user.failed_login_attempts += 1
+                if user.failed_login_attempts >= 5:
+                    user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+                    error_msg = 'パスワードを5回間違えたため、アカウントを15分間ロックしました。'
+                else:
+                    remaining = 5 - user.failed_login_attempts
+                    error_msg = f'パスワードが正しくありません。あと{remaining}回失敗するとロックされます。'
+                
+                db.session.commit()
+                print(f"Login failed: Password mismatch for {email}. Attempt: {user.failed_login_attempts}")
+                return jsonify({'success': False, 'error': error_msg}), 401
         else:
             print(f"Login failed: User not found: {email}")
-            
-        return jsonify({'success': False, 'error': 'メールアドレスまたはパスワードが正しくありません。'}), 401
+            return jsonify({'success': False, 'error': 'メールアドレスまたはパスワードが正しくありません。'}), 401
     return render_template('login.html')
 
 @app.route('/logout')
@@ -178,7 +208,8 @@ def admin():
         'today': AnalysisLog.query.filter(AnalysisLog.created_at >= today_start).count(),
         'month': AnalysisLog.query.filter(AnalysisLog.created_at >= month_start).count(),
         'total': AnalysisLog.query.count(),
-        'active_users': User.query.filter_by(is_active_member=True).count()
+        'active_users': User.query.filter_by(is_active_member=True).count(),
+        'now': now
     }
     
     users = User.query.all()
@@ -194,7 +225,16 @@ def admin_toggle_user(user_id):
     db.session.commit()
     return jsonify({'success': True, 'new_status': user.is_active_member})
 
-@app.route('/admin/register', methods=['POST'])
+@app.route('/admin/unlock/<int:user_id>', methods=['POST'])
+@login_required
+def admin_unlock_user(user_id):
+    if not current_user.is_admin:
+        return jsonify({'success': False}), 403
+    user = User.query.get_or_404(user_id)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    db.session.commit()
+    return jsonify({'success': True})
 @login_required
 def admin_register_user():
     if not current_user.is_admin:

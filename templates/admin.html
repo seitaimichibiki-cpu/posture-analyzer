@@ -127,14 +127,26 @@
                             <span id="status-{{ user.id }}" class="status-badge {% if user.is_active_member %}status-active{% else %}status-inactive{% endif %}">
                                 {% if user.is_active_member %}契約中{% else %}未契約{% endif %}
                             </span>
+                            {% if user.locked_until and user.locked_until > stats.now %}
+                            <div id="lock-badge-{{ user.id }}" style="margin-top: 4px; font-size: 10px; color: #ff4757; font-weight: bold;">
+                                🔒 ロック中
+                            </div>
+                            {% endif %}
                         </td>
                         <td>
                             {% if user.id == current_user.id %}
                             <button class="toggle-btn" disabled style="opacity: 0.5; cursor: not-allowed;">操作不可</button>
                             {% else %}
-                            <button id="btn-{{ user.id }}" onclick="toggleUser({{ user.id }})" class="toggle-btn {% if not user.is_active_member %}btn-off{% endif %}">
-                                {% if user.is_active_member %}停止する{% else %}許可する{% endif %}
-                            </button>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <button id="btn-{{ user.id }}" onclick="toggleUser({{ user.id }})" class="toggle-btn {% if not user.is_active_member %}btn-off{% endif %}">
+                                    {% if user.is_active_member %}停止する{% else %}許可する{% endif %}
+                                </button>
+                                {% if user.locked_until and user.locked_until > stats.now %}
+                                <button id="unlock-{{ user.id }}" onclick="unlockUser({{ user.id }})" class="toggle-btn" style="background: rgba(255, 71, 87, 0.1); color: #ff4757; border-color: #ff4757;">
+                                    ロック解除
+                                </button>
+                                {% endif %}
+                            </div>
                             {% endif %}
                         </td>
                     </tr>
@@ -207,6 +219,24 @@
             } finally {
                 btn.disabled = false;
                 btn.style.opacity = '1';
+            }
+        }
+
+        async function unlockUser(userId) {
+            if (!confirm('このユーザーのログインブロックを解除しますか？')) return;
+            
+            try {
+                const response = await fetch(`/admin/unlock/${userId}`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    const badge = document.getElementById(`lock-badge-${userId}`);
+                    if (badge) badge.remove();
+                    const btn = document.getElementById(`unlock-${userId}`);
+                    if (btn) btn.remove();
+                    showMessage('ユーザーのロックを解除しました。');
+                }
+            } catch (err) {
+                showMessage('通信エラーが発生しました。', true);
             }
         }
     </script>
