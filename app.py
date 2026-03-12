@@ -388,7 +388,11 @@ def admin_export_csv():
     writer = csv.writer(output)
     
     # ヘッダー
-    writer.writerow(['ID', '実行日時', 'ユーザーID/メール', '解析タイプ'])
+    writer.writerow([
+        'ID', '実行日時', 'ユーザーID/メール', '解析タイプ', 
+        '肩角度', '骨盤角度', '頭部角度', '頭部ズレ%', '肩ズレ%', '骨盤ズレ%',
+        'FHP%', 'ラウンド肩%', '側面骨盤角度', '体幹ズレ%'
+    ])
     
     # データ
     for log in logs:
@@ -398,13 +402,37 @@ def admin_export_csv():
             if user:
                 user_info = user.email
         
-        # 日本時間に調整（簡易的）
-        jst_time = log.created_at + timedelta(hours=9)
+        # 紐付く数値データを取得（最新の1件）
+        record = AnalysisRecord.query.filter_by(user_id=log.user_id).order_by(AnalysisRecord.created_at.desc()).first()
+        # ※本来はLogとRecordを1対1で紐付けるべきですが、現在の簡易実装では同時刻のものを当てるか、
+        # 実行時の ID を保持するように拡張するのが理想的です。
+        # 今回は、最新のデータエクスポートとして、Recordテーブルをベースにする形に書き換えます。
+        
+    # より正確に数値データを出すため、AnalysisRecordベースで出力するように変更
+    records = AnalysisRecord.query.order_by(AnalysisRecord.created_at.desc()).all()
+    for rec in records:
+        user_info = f"UID:{rec.user_id}"
+        if rec.user_id:
+            user = User.query.get(rec.user_id)
+            if user:
+                user_info = user.email
+        
+        jst_time = rec.created_at + timedelta(hours=9)
         writer.writerow([
-            log.id,
+            rec.id,
             jst_time.strftime('%Y-%m-%d %H:%M:%S'),
             user_info,
-            log.view_type
+            rec.view_type,
+            rec.shoulder_angle,
+            rec.pelvis_angle,
+            rec.head_angle,
+            rec.ear_shift_pct,
+            rec.shoulder_shift_pct,
+            rec.pelvis_shift_pct,
+            rec.fhp_pct,
+            rec.rs_pct,
+            rec.side_pelvis_angle,
+            rec.trunk_pct
         ])
     
     response = make_response(output.getvalue())
