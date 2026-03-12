@@ -327,10 +327,10 @@ def pxcoord(lm, w, h): return (int(lm.x*w), int(lm.y*h))
 def midpoint(p1, p2): return ((p1[0]+p2[0])//2, (p1[1]+p2[1])//2)
 def cv2pil(img): return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 def pil2cv2(img): return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-def draw_text(draw, pos, text, font, color): draw.text(pos, text, font=font, fill=color)
+def draw_text(draw, pos, text, font, color): draw.text(pos, text, font=font, fill=color, stroke_width=1, stroke_fill=color)
 def draw_text_center(draw, cx, y, text, font, color):
     bb = draw.textbbox((0, 0), text, font=font); tw = bb[2] - bb[0]
-    draw.text((cx - tw // 2, y), text, font=font, fill=color)
+    draw.text((cx - tw // 2, y), text, font=font, fill=color, stroke_width=1, stroke_fill=color)
 
 CONNECTIONS = [(0,1),(1,2),(2,3),(3,7),(0,4),(4,5),(5,6),(6,8),(9,10),(11,12),(11,13),(13,15),(12,14),(14,16),(11,23),(12,24),(23,24),(23,25),(25,27),(24,26),(26,28)]
 def draw_skeleton(img, lm, w, h):
