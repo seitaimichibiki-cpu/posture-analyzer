@@ -247,6 +247,13 @@ button {
     min-height: 180px !important;
 }
 
+#resultImage {
+    width: 100%;
+    height: auto;
+    display: block;
+    image-rendering: -webkit-optimize-contrast; /* 画像の鮮明度を上げる */
+}
+
 /* Loading Overlay 高級感アップ */
 .overlay {
     position: fixed;
