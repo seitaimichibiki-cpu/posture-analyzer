@@ -70,6 +70,14 @@ def init_and_migrate():
             if 'analysis_record' not in inspector.get_table_names():
                 db.create_all()
                 print("Database migrated: Created analysis_record table.")
+            else:
+                # 顧客IDカラムがなければ追加
+                analysis_columns = [c['name'] for c in inspector.get_columns('analysis_record')]
+                if 'patient_id' not in analysis_columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text('ALTER TABLE analysis_record ADD COLUMN patient_id VARCHAR(50)'))
+                        conn.commit()
+                    print("Database migrated: Added patient_id column to analysis_record.")
         except Exception as e:
             # ログに出力
             app.logger.error(f"Migration error: {e}")
@@ -98,6 +106,7 @@ class AnalysisLog(db.Model):
 class AnalysisRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    patient_id = db.Column(db.String(50), nullable=True) # 顧客ID/名前
     view_type = db.Column(db.String(20)) # 'front', 'side'
     
     # 正面データ
@@ -408,7 +417,7 @@ def admin_export_csv():
     
     # ヘッダー
     writer.writerow([
-        'ID', '実行日時', 'ユーザーID/メール', '解析タイプ', 
+        'ID', '実行日時', '顧客ID/名前', 'ユーザーID/メール', '解析タイプ', 
         '肩角度', '骨盤角度', '頭部角度', '頭部ズレ%', '肩ズレ%', '骨盤ズレ%',
         'FHP%', 'ラウンド肩%', '側面骨盤角度', '体幹ズレ%'
     ])
@@ -440,6 +449,7 @@ def admin_export_csv():
         writer.writerow([
             rec.id,
             jst_time.strftime('%Y-%m-%d %H:%M:%S'),
+            rec.patient_id,
             user_info,
             rec.view_type,
             rec.shoulder_angle,
@@ -466,6 +476,7 @@ def analyze():
     
     file = request.files['image']
     view_type = request.form.get('view_type', 'auto') # 'front', 'side', or 'auto'
+    patient_id = request.form.get('patient_id', '')
 
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -492,6 +503,7 @@ def analyze():
                 data = res.get('data', {})
                 record = AnalysisRecord(
                     user_id=current_user.id if current_user.is_authenticated else None,
+                    patient_id=patient_id,
                     view_type=res.get('view', view_type),
                     shoulder_angle=data.get('shoulder_angle'),
                     pelvis_angle=data.get('pelvis_angle'),
@@ -528,6 +540,7 @@ def compare():
     file_b = request.files['image_before']
     file_a = request.files['image_after']
     view_type = request.form.get('view_type', 'auto')
+    patient_id = request.form.get('patient_id', '')
 
     # ユニークファイル名生成
     uid = uuid.uuid4().hex[:8]
@@ -558,6 +571,7 @@ def compare():
                 d = {it['n']: it['v'] for it in items}
                 record = AnalysisRecord(
                     user_id=current_user.id if current_user.is_authenticated else None,
+                    patient_id=patient_id,
                     view_type=f"{view}_{prefix_type}",
                     shoulder_angle=d.get('肩傾き') or d.get('ラウンド肩'),
                     pelvis_angle=d.get('骨盤傾き') or d.get('骨盤前後傾'),

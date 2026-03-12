@@ -61,6 +61,10 @@
                     </div>
                     
                     <div class="actions">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label for="patient_id" style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">顧客ID・お名前（任意）</label>
+                            <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;">
+                        </div>
                         <input type="file" id="fileInputCamera" accept="image/*" capture="camera" style="display: none;">
                         <input type="file" id="fileInputLibrary" accept="image/*" style="display: none;">
                         <div class="input-group">
@@ -91,6 +95,10 @@
                 </div>
 
                 <div class="actions-footer">
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="comp_patient_id" style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">顧客ID・お名前（任意）</label>
+                        <input type="text" id="comp_patient_id" placeholder="進捗管理用のIDを入力" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;">
+                    </div>
                     <button id="btnAnalyze" class="analyze-btn" disabled onclick="handleExecution()">🚀 解析を実行</button>
                 </div>
             </section>
@@ -137,6 +145,11 @@
             
             document.getElementById('singleModeArea').style.display = view === 'compare' ? 'none' : 'block';
             document.getElementById('compareModeArea').style.display = view === 'compare' ? 'flex' : 'none';
+            
+            // Show/hide patient ID input based on mode
+            document.getElementById('patient_id').closest('.form-group').style.display = view === 'compare' ? 'none' : 'block';
+            document.getElementById('comp_patient_id').closest('.form-group').style.display = view === 'compare' ? 'block' : 'none';
+
             checkReady();
         }
 
@@ -218,6 +231,7 @@
                 const formData = new FormData();
                 formData.append('image', resizedBlob, 'upload.jpg');
                 formData.append('view_type', currentView);
+                formData.append('patient_id', document.getElementById('patient_id').value);
 
                 // クラウド環境（Render）の無料プランは最初の起動に時間がかかるため
                 // 明示的に "/analyze" への相対パスでリクエストを送る
