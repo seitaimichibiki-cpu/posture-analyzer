@@ -81,7 +81,7 @@ class PoseAnalyzer:
 
         # 1. リサイズ（標準化）
         orig_h, orig_w = img.shape[:2]
-        target_h = 1200
+        target_h = 800
         target_w = int(orig_w * (target_h / orig_h))
         # 高品質補間
         img = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
@@ -90,6 +90,9 @@ class PoseAnalyzer:
         # 2. 姿勢検出
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         result = self.detector.detect(mp_image)
+
+        # メモリ解放のヒント（ガベージコレクションを明示的に呼ぶ準備）
+        import gc
 
         if not result.pose_landmarks:
             print(f"  [SKIP] 人物が検出されませんでした: {os.path.basename(image_path)}")
@@ -103,11 +106,17 @@ class PoseAnalyzer:
         else:
             view = view_type
 
-        # 4. 各解析ロジック呼び出し
+        # 後処理
+        res = None
         if view == 'front':
-            return self._analyze_front(img, lm, w, h, output_path)
+            res = self._analyze_front(img, lm, w, h, output_path)
         else:
-            return self._analyze_side(img, lm, w, h, output_path)
+            res = self._analyze_side(img, lm, w, h, output_path)
+            
+        # 明示的なメモリ解放
+        del mp_image, result, img
+        gc.collect()
+        return res
 
     def _detect_view(self, lm):
         shldr_dx = abs(lm[11].x - lm[12].x)
