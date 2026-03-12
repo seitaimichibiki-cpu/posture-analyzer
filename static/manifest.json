@@ -1,0 +1,18 @@
+{
+  "name": "整体院 導 姿勢解析",
+  "short_name": "導 姿勢解析",
+  "description": "AIによる高精度姿勢解析システム",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080a12",
+  "theme_color": "#080a12",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
