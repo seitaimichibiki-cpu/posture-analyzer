@@ -593,9 +593,8 @@ def compare():
 
     try:
         res = get_analyzer().analyze_comparison(path_b, path_a, output_path, view_type=view_type)
-        if res and res[0]: # res[0] is success
-            success = res[0]
-            data = res[1]
+        if res and res.get('success'):
+            data = res.get('data', {})
             view = data.get('view', view_type)
             
             # ログ記録
