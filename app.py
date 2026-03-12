@@ -25,6 +25,27 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login' # ログインしていない場合に飛ばす先
 
+# ─── データベース初期化・自動マイグレーション ────────────────────────────────
+def init_and_migrate():
+    with app.app_context():
+        db.create_all()
+        # SQLite用の簡易的なカラム追加チェック
+        import sqlalchemy
+        inspector = sqlalchemy.inspect(db.engine)
+        columns = [c['name'] for c in inspector.get_columns('user')]
+        
+        # 不要なカラム追加を避けるためのチェック
+        if 'reset_token' not in columns:
+            try:
+                db.engine.execute('ALTER TABLE user ADD COLUMN reset_token VARCHAR(100)')
+                db.engine.execute('ALTER TABLE user ADD COLUMN reset_token_expiration DATETIME')
+                print("Database migrated: Added password reset columns.")
+            except Exception as e:
+                # すでにある場合のエラーは無視
+                print(f"Migration notice: {e}")
+
+init_and_migrate()
+
 # ─── データベースモデル ──────────────────────────────────────────────────────
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)

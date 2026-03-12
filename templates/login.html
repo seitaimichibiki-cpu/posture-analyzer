@@ -71,6 +71,16 @@
 
             <div id="errorMsg" class="error-msg"></div>
 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }}" style="padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; text-align: center; background: rgba(46, 204, 113, 0.1); color: #2ecc71;">
+                    {{ message }}
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
             <form id="loginForm">
                 <div class="form-group">
                     <label for="email">メールアドレス</label>
