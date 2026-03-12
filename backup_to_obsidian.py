@@ -7,7 +7,7 @@ BACKUP_TOKEN = "seitai-backup-2026-safe"
 RENDER_URL = f"https://posture-analyzer-clinic.onrender.com/admin/backup?token={BACKUP_TOKEN}"
 # 2026 会員バックアップ先フォルダ（絶対パス）
 BACKUP_DIR = "/Users/ishikawagai/Desktop/整体院導/姿勢AIバックアップ"
-# ファイル名に日付を入れる（例: members_backup_2024-03-12.md）
+# ファイル名に日付を入れる（例: members_backup_2026-03-12.md）
 FILENAME = f"members_backup_{datetime.now().strftime('%Y-%m-%d')}.md"
 
 def download_backup():
