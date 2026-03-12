@@ -1,7 +1,8 @@
 import os
 import sys
 import uuid
-from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect, flash
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -11,9 +12,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from pose_analyzer import PoseAnalyzer
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'seitai-michibiki-secret-key-12345' # 本番環境では環境変数から取得推奨
+# 環境変数から取得
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'seitai-michibiki-secret-key-12345')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# バックアップ用トークンも環境変数から取得
+BACKUP_TOKEN = os.environ.get('BACKUP_TOKEN', 'seitai-backup-2026-safe')
 
 CORS(app)
 db = SQLAlchemy(app)
@@ -27,6 +32,9 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(200), nullable=False)
     is_active_member = db.Column(db.Boolean, default=False) # サブスク有効フラグ
     is_admin = db.Column(db.Boolean, default=False)
+    # パスワードリセット用
+    reset_token = db.Column(db.String(100), unique=True, nullable=True)
+    reset_token_expiration = db.Column(db.DateTime, nullable=True)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -147,13 +155,52 @@ def admin_register_user():
     
     return jsonify({'success': True})
 
+# ─── パスワードリセット ──────────────────────────────────────────────────────
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # トークン生成
+            token = str(uuid.uuid4())
+            user.reset_token = token
+            user.reset_token_expiration = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+            
+            # 本来はメールを送信するが、今回はデバッグ用に出力して画面に表示
+            reset_url = url_for('reset_password', token=token, _external=True)
+            print(f"Password reset link for {email}: {reset_url}")
+            flash(f'パスワード再設定リンクを発行しました（デバッグ用）: {reset_url}', 'info')
+        else:
+            flash('そのメールアドレスは登録されていません。', 'danger')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    if not user or user.reset_token_expiration < datetime.utcnow():
+        flash('無効なトークン、または期限切れです。', 'danger')
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        user.password = generate_password_hash(password)
+        user.reset_token = None
+        user.reset_token_expiration = None
+        db.session.commit()
+        flash('パスワードを更新しました。新しいパスワードでログインしてください。', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', token=token)
+
 @app.route('/admin/backup')
 def admin_backup():
     # トークンによる認証またはログイン済み管理者のみ
     token = request.args.get('token')
-    expected_token = "seitai-backup-2026-safe" # 簡易的なトークン
     
-    if token != expected_token:
+    if token != BACKUP_TOKEN:
         if not current_user.is_authenticated or not current_user.is_admin:
             return jsonify({'success': False, 'error': '権限がありません。'}), 403
     

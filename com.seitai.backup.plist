@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.seitai.backup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/ishikawagai/Desktop/整体院導/web_app/backup_to_obsidian.py</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer> <!-- 0: Sunday -->
+        <key>Hour</key>
+        <integer>22</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/ishikawagai/Desktop/整体院導/web_app/backup_log.txt</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/ishikawagai/Desktop/整体院導/web_app/backup_error.txt</string>
+</dict>
+</plist>
