@@ -9,6 +9,7 @@ import sqlalchemy
 from sqlalchemy import text, inspect
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_mail import Mail, Message
 
 # 姿勢解析エンジンのインポート
 from pose_analyzer import PoseAnalyzer
@@ -21,6 +22,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # バックアップ用トークンも環境変数から取得
 BACKUP_TOKEN = os.environ.get('BACKUP_TOKEN', 'seitai-backup-2026-safe')
+
+# メール設定 (Gmail SMTP)
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'seitaimichibiki@gmail.com')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD') # Renderの環境変数で設定
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', 'seitaimichibiki@gmail.com')
+
+mail = Mail(app)
 
 CORS(app)
 @app.errorhandler(404)
@@ -232,6 +243,36 @@ def update_password():
     current_user.password = generate_password_hash(new_pw)
     db.session.commit()
     return jsonify({'success': True})
+
+@app.route('/support')
+def support():
+    return render_template('support.html')
+
+@app.route('/support/send', methods=['POST'])
+def support_send():
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'データが送信されていません。'}), 400
+    
+    name = data.get('name')
+    email = data.get('email')
+    subject = data.get('subject')
+    message = data.get('message')
+
+    if not all([name, email, subject, message]):
+        return jsonify({'success': False, 'error': 'すべての項目を入力してください。'}), 400
+
+    try:
+        msg = Message(
+            subject=f"【お問い合わせ】{subject}",
+            recipients=['seitaimichibiki@gmail.com'],
+            body=f"お名前: {name}\nメールアドレス: {email}\n\n内容:\n{message}"
+        )
+        mail.send(msg)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"メール送信エラー: {e}")
+        return jsonify({'success': False, 'error': 'メールの送信に失敗しました。時間をおいて再度お試しください。'}), 500
 
 @app.route('/stats')
 @login_required

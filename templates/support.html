@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>お問い合わせ ｜ 整体院 導</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .support-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .support-card {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .support-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+        }
+        .contact-method {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>お問い合わせ</h1>
+            <p class="subtitle">不具合報告・ご要望・ご質問</p>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('index') }}" style="color: var(--text-muted); text-decoration: none; font-size: 14px;">← 解析画面に戻る</a>
+            </div>
+        </header>
+
+        <main class="support-container">
+            <section class="card support-card">
+                <span class="support-icon">✉️</span>
+                <h2 style="margin-bottom: 15px; font-size: 20px;">お問い合わせフォーム</h2>
+                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 30px;">
+                    システムの不具合報告や、機能に関するご要望は以下のフォームよりお送りください。
+                </p>
+
+                <div id="alertBox" class="message" style="display: none; margin-bottom: 20px; padding: 12px; border-radius: 8px; font-size: 14px;"></div>
+
+                <form id="supportForm" style="text-align: left;">
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="name" style="display: block; margin-bottom: 8px; font-size: 14px;">お名前</label>
+                        <input type="text" id="name" name="name" required style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="email" style="display: block; margin-bottom: 8px; font-size: 14px;">返信用メールアドレス</label>
+                        <input type="email" id="email" name="email" required style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="subject" style="display: block; margin-bottom: 8px; font-size: 14px;">件名</label>
+                        <select id="subject" name="subject" required style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white;">
+                            <option value="">選択してください</option>
+                            <option value="不具合報告">不具合報告</option>
+                            <option value="機能要望">機能要望</option>
+                            <option value="ご質問">ご質問</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 30px;">
+                        <label for="message" style="display: block; margin-bottom: 8px; font-size: 14px;">お問い合わせ内容</label>
+                        <textarea id="message" name="message" rows="5" required style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white; resize: vertical;"></textarea>
+                    </div>
+
+                    <button type="submit" id="submitBtn" class="analyze-btn" style="width: 100%;">
+                        送信する
+                    </button>
+                </form>
+            </section>
+
+            <script>
+                document.getElementById('supportForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const btn = document.getElementById('submitBtn');
+                    const alertBox = document.getElementById('alertBox');
+                    
+                    const data = {
+                        name: document.getElementById('name').value,
+                        email: document.getElementById('email').value,
+                        subject: document.getElementById('subject').value,
+                        message: document.getElementById('message').value
+                    };
+
+                    btn.disabled = true;
+                    btn.textContent = '送信中...';
+                    alertBox.style.display = 'none';
+
+                    try {
+                        const response = await fetch('/support/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const result = await response.json();
+
+                        if (result.success) {
+                            alertBox.textContent = 'お問い合わせを送信しました。ありがとうございました。';
+                            alertBox.style.background = 'rgba(80, 230, 120, 0.1)';
+                            alertBox.style.color = '#50e678';
+                            alertBox.style.border = '1px solid #50e678';
+                            alertBox.style.display = 'block';
+                            document.getElementById('supportForm').reset();
+                        } else {
+                            throw new Error(result.error || '送信に失敗しました。');
+                        }
+                    } catch (error) {
+                        alertBox.textContent = error.message || '通信エラーが発生しました。';
+                        alertBox.style.background = 'rgba(255, 71, 87, 0.1)';
+                        alertBox.style.color = '#ff4757';
+                        alertBox.style.border = '1px solid #ff4757';
+                        alertBox.style.display = 'block';
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = '送信する';
+                    }
+                });
+            </script>
+
+            <section class="card" style="margin-top: 30px;">
+                <h3 style="margin-bottom: 15px; font-size: 18px; color: var(--accent);">💡 よくあるご質問</h3>
+                <ul style="text-align: left; color: var(--text-muted); font-size: 14px; padding-left: 20px; line-height: 2;">
+                    <li>解析が始まらない → ネット接続を確認し、ページを再読み込みしてください。</li>
+                    <li>ログインできない → パスワードリセット機能をお試しください。</li>
+                    <li>契約について → 受付窓口にて直接スタッフにお声がけください。</li>
+                </ul>
+            </section>
+        </main>
+
+        <footer style="margin-top: 50px; text-align: center; color: var(--text-muted); font-size: 12px; padding-bottom: 30px;">
+            &copy; 2024 整体院 導 ｜ AI Posture Analysis System
+        </footer>
+    </div>
+</body>
+</html>
