@@ -62,6 +62,12 @@ class User(UserMixin, db.Model):
     reset_token = db.Column(db.String(100), unique=True, nullable=True)
     reset_token_expiration = db.Column(db.DateTime, nullable=True)
 
+class AnalysisLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    view_type = db.Column(db.String(20), nullable=False) # 'front', 'side', 'compare'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -162,8 +168,21 @@ def download_image(filename):
 def admin():
     if not current_user.is_admin:
         return redirect(url_for('index'))
+    
+    # 統計データの取得
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    month_start = datetime(now.year, now.month, 1)
+    
+    stats = {
+        'today': AnalysisLog.query.filter(AnalysisLog.created_at >= today_start).count(),
+        'month': AnalysisLog.query.filter(AnalysisLog.created_at >= month_start).count(),
+        'total': AnalysisLog.query.count(),
+        'active_users': User.query.filter_by(is_active_member=True).count()
+    }
+    
     users = User.query.all()
-    return render_template('admin.html', users=users)
+    return render_template('admin.html', users=users, stats=stats)
 
 @app.route('/admin/toggle/<int:user_id>', methods=['POST'])
 @login_required
@@ -296,6 +315,11 @@ def analyze():
         success = get_analyzer().analyze(input_path, output_path, view_type=view_type)
 
         if success:
+            # ログ記録
+            log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type=view_type)
+            db.session.add(log)
+            db.session.commit()
+            
             return jsonify({
                 'success': True,
                 'report_url': url_for('static', filename=f'uploads/report_{filename}')
@@ -329,6 +353,11 @@ def compare():
     try:
         success = get_analyzer().analyze_comparison(path_b, path_a, output_path, view_type=view_type)
         if success:
+            # ログ記録
+            log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type='compare')
+            db.session.add(log)
+            db.session.commit()
+
             return jsonify({
                 'success': True,
                 'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg')
