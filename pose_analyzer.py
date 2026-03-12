@@ -21,7 +21,7 @@ from mediapipe.tasks.python import vision
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 FONT_CANDIDATES = [
-    os.path.join(SCRIPT_DIR, "NotoSansJP-Regular.ttf"),
+    os.path.join(SCRIPT_DIR, "NotoSansJP.ttf"),
     "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
     "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
     "/System/Library/Fonts/AppleSDGothicNeo.ttc",
@@ -81,7 +81,7 @@ class PoseAnalyzer:
 
         # 1. リサイズ（標準化）
         orig_h, orig_w = img.shape[:2]
-        target_h = 400
+        target_h = 800
         target_w = int(orig_w * (target_h / orig_h))
         # 高品質補間
         img = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
