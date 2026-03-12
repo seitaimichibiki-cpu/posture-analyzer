@@ -220,9 +220,9 @@
                 const resizedBlobA = await resizeImage(fileA, 600);
 
                 const formData = new FormData();
-                formData.append('image_b', resizedBlobB, 'before.jpg');
-                formData.append('image_a', resizedBlobA, 'after.jpg');
-                formData.append('view_type', currentView);
+                formData.append('image_before', resizedBlobB, 'before.jpg');
+                formData.append('image_after', resizedBlobA, 'after.jpg');
+                formData.append('view_type', 'auto');
 
                 const response = await fetch('/compare', {
                     method: 'POST',
@@ -239,6 +239,20 @@
                 console.error(err);
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        function handleResult(data) {
+            if (data.success) {
+                const filename = data.report_url.split('/').pop();
+                const reportUrl = data.report_url + '?t=' + Date.now();
+                document.getElementById('resultImage').src = reportUrl;
+                const downloadBtn = document.getElementById('downloadBtn');
+                downloadBtn.href = window.location.origin + '/download/' + filename;
+                document.getElementById('resultSection').style.display = 'block';
+                document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert('エラー: ' + data.error);
             }
         }
 
