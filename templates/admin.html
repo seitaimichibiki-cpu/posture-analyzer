@@ -64,21 +64,32 @@
                 </thead>
                 <tbody>
                     {% for user in users %}
-                    {% if not user.is_admin %}
                     <tr>
-                        <td>{{ user.email }}</td>
                         <td>
-                            <span id="status-{{ user.id }}" class="status-badge {{ 'status-active' if user.is_active_member else 'status-inactive' }}">
-                                {{ '契約中' if user.is_active_member else '未契約' }}
-                            </span>
+                            {{ user.email }}
+                            {% if user.is_admin %}
+                            <span class="badge" style="background: var(--primary); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; margin-left: 8px;">管理者</span>
+                            {% endif %}
                         </td>
                         <td>
-                            <button onclick="toggleUser({{ user.id }})" id="btn-{{ user.id }}" class="toggle-btn {{ '' if user.is_active_member else 'btn-off' }}">
-                                {{ '停止する' if user.is_active_member else '許可する' }}
-                            </button>
+                            {% if user.is_active_member %}
+                            <span class="status status-active">利用中</span>
+                            {% else %}
+                            <span class="status status-inactive">停止中</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.id == current_user.id %}
+                            <button class="btn btn-toggle" disabled title="自身の権限は変更できません">操作不可</button>
+                            {% else %}
+                            <form action="{{ url_for('admin_toggle_user', user_id=user.id) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-toggle">
+                                    {% if user.is_active_member %}停止する{% else %}許可する{% endif %}
+                                </button>
+                            </form>
+                            {% endif %}
                         </td>
                     </tr>
-                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
