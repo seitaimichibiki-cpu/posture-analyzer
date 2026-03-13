@@ -776,28 +776,6 @@ def search_line_users():
         'updated_at': m.updated_at.strftime('%Y-%m-%d %H:%M')
     } for m in mappings])
 
-@app.route('/callback', methods=['POST'])
-def callback():
-    # LINE Webhookの署名検証用などの設定
-    # ※各ユーザーのsecretが必要なため、簡易版として実装。
-    # 本来は X-Line-Signature の検証を推奨。
-    
-    body = request.get_data(as_text=True)
-    try:
-        data = json.loads(body)
-        for event in data.get('events', []):
-            if event.get('type') == 'message' or event.get('type') == 'follow':
-                line_user_id = event['source']['userId']
-                
-                # 送信先のアクセストークンを特定する必要がある。
-                # Webhook URLにユーザーIDを含める運用（例: /callback/<user_id>）が一般的。
-                # ここでは簡易的に、全ユーザーのトークンを試すか、URLパラメータで識別する設計を想定。
-                # 今回はURLパラメータ /callback/<user_id> への変更を検討。
-                pass
-    except:
-        pass
-    
-    return 'OK'
 
 @app.route('/callback/<int:user_id>', methods=['POST'])
 def user_callback(user_id):
