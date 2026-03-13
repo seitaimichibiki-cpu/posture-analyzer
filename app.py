@@ -16,9 +16,17 @@ from flask_mail import Mail, Message
 from pose_analyzer import PoseAnalyzer
 
 app = Flask(__name__)
-# 環境変数から取得
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'seitai-michibiki-secret-key-12345')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
+
+# DB設定: 環境変数 DATABASE_URL があれば使用（RenderのPostgres等）、なければSQLite
+db_url = os.environ.get('DATABASE_URL')
+if db_url:
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # バックアップ用トークンも環境変数から取得
