@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>顧客詳細 ｜ {{ patient_id }} ｜ 整体院 導</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -161,6 +163,37 @@
             background: rgba(6, 199, 85, 0.1);
             color: #06C755;
         }
+        /* Chart Styles */
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 15px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+        }
+        .chart-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .chart-tab-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .chart-tab-btn.active {
+            background: var(--accent-gradient);
+            color: #080a12;
+            border: none;
+            font-weight: 600;
+        }
+        #chartArea canvas {
+            max-height: 250px;
+        }
         .report-preview {
             display: flex;
             gap: 15px;
@@ -211,6 +244,17 @@
         </header>
 
         <main>
+            <div id="progressChartCard" class="chart-card" style="display: none;">
+                <div class="chart-tabs">
+                    <button id="tabFront" class="chart-tab-btn active" onclick="switchChart('front')">正面の推移</button>
+                    <button id="tabSide" class="chart-tab-btn" onclick="switchChart('side')">側面の推移</button>
+                </div>
+                <div id="chartArea">
+                    <canvas id="mainChart"></canvas>
+                </div>
+                <p id="chartDesc" style="font-size: 10px; color: var(--text-muted); margin-top: 10px; text-align: center;">※ 0に近いほど良好な状態です</p>
+            </div>
+
             <div class="history-list">
                 {% for record in records %}
                 <div id="record-{{ record.id }}" class="history-item">
@@ -421,6 +465,79 @@
             // フィールドにはIDをセットする必要がある。
             // プレースホルダーや別のラベルで名前を出すのもあり。
         }
+
+        // --- Chart Logic ---
+        let mainChart;
+        let allStats = [];
+
+        async function loadProgressCharts() {
+            try {
+                const pid = "{{ patient_id }}";
+                const res = await fetch(`/api/patient_stats?patient_id=${encodeURIComponent(pid)}`);
+                const result = await res.json();
+                
+                if (result.success && result.data.length > 1) {
+                    allStats = result.data;
+                    document.getElementById('progressChartCard').style.display = 'block';
+                    renderCombinedChart('front');
+                }
+            } catch (e) {
+                console.error('Failed to load charts', e);
+            }
+        }
+
+        function switchChart(view) {
+            document.getElementById('tabFront').classList.toggle('active', view === 'front');
+            document.getElementById('tabSide').classList.toggle('active', view === 'side');
+            renderCombinedChart(view);
+        }
+
+        function renderCombinedChart(view) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            const data = allStats.filter(d => d.view === view || d.view.includes(view));
+            
+            if (mainChart) mainChart.destroy();
+            
+            if (data.length < 2) {
+                // Not enough data for this specific view
+                document.getElementById('chartArea').innerHTML = '<canvas id="mainChart"></canvas><div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 13px;">まだ十分なデータがありません</div>';
+                return;
+            }
+
+            const chartLabels = data.map(d => d.date.split(' ')[0].substring(5)); // MM-DD
+            let datasets = [];
+
+            if (view === 'front') {
+                datasets = [
+                    { label: '肩の傾き', data: data.map(d => Math.abs(d.shoulder_angle)), borderColor: '#4facfe', tension: 0.3, fill: false },
+                    { label: '骨盤の傾き', data: data.map(d => Math.abs(d.pelvis_angle)), borderColor: '#00e676', tension: 0.3, fill: false }
+                ];
+            } else {
+                datasets = [
+                    { label: '首のズレ(%)', data: data.map(d => d.fhp), borderColor: '#fbc2eb', tension: 0.3, fill: false },
+                    { label: '巻肩(%)', data: data.map(d => d.rs), borderColor: '#a18cd1', tension: 0.3, fill: false }
+                ];
+            }
+
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: chartLabels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { labels: { color: '#94a3b8', font: { size: 10 } } }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666', font: { size: 9 } } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666', font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        // Initialize on load
+        window.addEventListener('load', loadProgressCharts);
 
         // クリック以外で検索窓を閉じる処理
         document.addEventListener('click', (e) => {
