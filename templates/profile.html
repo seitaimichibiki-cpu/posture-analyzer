@@ -135,7 +135,7 @@
 
                 <div id="lineAlertBox" class="message"></div>
 
-                <form id="lineSettingsForm">
+                <form id="lineSettingsForm" method="POST" onsubmit="return false;">
                     <div class="form-group">
                         <label for="line_access_token">チャネルアクセストークン</label>
                         <input type="text" id="line_access_token" name="line_access_token" value="{{ user.line_access_token if user.line_access_token else '' }}" placeholder="eyJhbGciOiJIUzI1NiJ9...">
