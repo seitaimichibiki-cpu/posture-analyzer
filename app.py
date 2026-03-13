@@ -419,6 +419,26 @@ def stats():
     patient_id = request.args.get('patient_id', '')
     return render_template('stats.html', user=current_user, patient_id=patient_id)
 
+@app.route('/api/patients/search')
+@login_required
+def api_search_patients():
+    query = request.args.get('q', '').strip()
+    # ログインユーザーに関連するユニークな顧客IDを抽出
+    # 重複を排除し、最近のものを優先するためにIDでソート
+    subquery = db.session.query(
+        AnalysisRecord.patient_id,
+        db.func.max(AnalysisRecord.id).label('max_id')
+    ).filter(
+        AnalysisRecord.user_id == current_user.id,
+        AnalysisRecord.patient_id.ilike(f'%{query}%')
+    ).group_by(AnalysisRecord.patient_id).subquery()
+
+    results = db.session.query(subquery.c.patient_id)\
+        .order_by(subquery.c.max_id.desc())\
+        .limit(10).all()
+    
+    return jsonify([r.patient_id for r in results])
+
 @app.route('/api/patient_stats')
 @login_required
 def api_patient_stats():

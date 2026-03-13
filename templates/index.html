@@ -92,12 +92,13 @@
                 </div>
 
                 <div class="actions-footer">
-                    <div class="form-group" style="margin-bottom: 15px;">
+                    <div class="form-group" style="margin-bottom: 15px; position: relative;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
                             <label for="patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
                             <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
                         </div>
-                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;">
+                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off">
+                        <div id="patient-search-results" class="line-search-results"></div>
                     </div>
                     <button id="btnAnalyze" class="analyze-btn" disabled onclick="handleExecution()">🚀 解析を実行</button>
                 </div>
@@ -341,6 +342,80 @@
             document.getElementById('resultSection').style.display = 'none';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+
+        // --- Patient Autocomplete Logic ---
+        let patientSearchTimeout;
+        let selectedPatientIdx = -1;
+
+        const patientInput = document.getElementById('patient_id');
+        const patientResults = document.getElementById('patient-search-results');
+
+        patientInput.addEventListener('input', () => {
+            const query = patientInput.value.trim();
+            if (query.length < 1) {
+                patientResults.style.display = 'none';
+                return;
+            }
+
+            clearTimeout(patientSearchTimeout);
+            patientSearchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/patients/search?q=${encodeURIComponent(query)}`);
+                    const patients = await response.json();
+                    
+                    if (patients.length > 0) {
+                        selectedPatientIdx = -1;
+                        patientResults.innerHTML = patients.map((name, idx) => `
+                            <div class="line-search-item patient-suggest-item" data-idx="${idx}" onclick="selectPatient('${name}')">
+                                <span>${name}</span>
+                            </div>
+                        `).join('');
+                        patientResults.style.display = 'block';
+                    } else {
+                        patientResults.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error('Patient search failed', err);
+                }
+            }, 300);
+        });
+
+        patientInput.addEventListener('keydown', (e) => {
+            const items = document.querySelectorAll('.patient-suggest-item');
+            if (patientResults.style.display === 'none' || items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedPatientIdx = (selectedPatientIdx + 1) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedPatientIdx = (selectedPatientIdx - 1 + items.length) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'Enter' && selectedPatientIdx >= 0) {
+                e.preventDefault();
+                selectPatient(items[selectedPatientIdx].textContent.trim());
+            }
+        });
+
+        function updateSelection(items) {
+            items.forEach((item, idx) => {
+                item.style.background = idx === selectedPatientIdx ? 'rgba(6, 199, 85, 0.1)' : '';
+                item.style.color = idx === selectedPatientIdx ? '#06C755' : '';
+                if (idx === selectedPatientIdx) item.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        function selectPatient(name) {
+            patientInput.value = name;
+            patientResults.style.display = 'none';
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.form-group')) {
+                patientResults.style.display = 'none';
+            }
+        });
     </script>
     <footer style="margin-top: 60px; padding: 30px 20px; text-align: center; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted);">
         <div style="margin-bottom: 10px;">
