@@ -1,6 +1,7 @@
 import os
 import sys
 import uuid
+import json
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect, flash
 from flask_cors import CORS
@@ -134,6 +135,20 @@ def init_and_migrate():
                         conn.execute(text('ALTER TABLE analysis_record ADD COLUMN line_user_id VARCHAR(100)'))
                         conn.commit()
                     print("Database migrated: Added line_user_id column to analysis_record.")
+                # LineUserMappingテーブル作成
+                with db.engine.connect() as conn:
+                    conn.execute(text('''
+                        CREATE TABLE IF NOT EXISTS line_user_mapping (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            line_user_id VARCHAR(100) NOT NULL,
+                            display_name VARCHAR(255),
+                            owner_id INTEGER NOT NULL,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY(owner_id) REFERENCES user(id)
+                        )
+                    '''))
+                    conn.commit()
+                print("Database migrated: Ensured line_user_mapping table exists.")
         except Exception as e:
             # ログに出力
             app.logger.error(f"Migration error: {e}")
@@ -156,6 +171,13 @@ class User(UserMixin, db.Model):
     # ログイン試行制限用
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
+
+class LineUserMapping(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    line_user_id = db.Column(db.String(100), nullable=False)
+    display_name = db.Column(db.String(255))
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
 class AnalysisLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -729,6 +751,93 @@ def send_line_report():
     except Exception as e:
         app.logger.error(f"LINE send error: {e}")
         return jsonify({'success': False, 'error': f'送信に失敗しました: {str(e)}'}), 500
+
+@app.route('/api/line/search_users', methods=['GET'])
+@login_required
+def search_line_users():
+    query = request.args.get('q', '')
+    # ログイン中のユーザー（院）が収集したマッピングのみ検索
+    mappings = LineUserMapping.query.filter(
+        LineUserMapping.owner_id == current_user.id,
+        LineUserMapping.display_name.ilike(f'%{query}%')
+    ).order_by(LineUserMapping.updated_at.desc()).limit(10).all()
+    
+    return jsonify([{
+        'line_user_id': m.line_user_id,
+        'display_name': m.display_name,
+        'updated_at': m.updated_at.strftime('%Y-%m-%d %H:%M')
+    } for m in mappings])
+
+@app.route('/callback', methods=['POST'])
+def callback():
+    # LINE Webhookの署名検証用などの設定
+    # ※各ユーザーのsecretが必要なため、簡易版として実装。
+    # 本来は X-Line-Signature の検証を推奨。
+    
+    body = request.get_data(as_text=True)
+    try:
+        data = json.loads(body)
+        for event in data.get('events', []):
+            if event.get('type') == 'message' or event.get('type') == 'follow':
+                line_user_id = event['source']['userId']
+                
+                # 送信先のアクセストークンを特定する必要がある。
+                # Webhook URLにユーザーIDを含める運用（例: /callback/<user_id>）が一般的。
+                # ここでは簡易的に、全ユーザーのトークンを試すか、URLパラメータで識別する設計を想定。
+                # 今回はURLパラメータ /callback/<user_id> への変更を検討。
+                pass
+    except:
+        pass
+    
+    return 'OK'
+
+@app.route('/callback/<int:user_id>', methods=['POST'])
+def user_callback(user_id):
+    from linebot import LineBotApi
+    user = User.query.get(user_id)
+    if not user or not user.line_access_token:
+        return 'User configuration missing', 400
+
+    body = request.get_data(as_text=True)
+    signature = request.headers.get('X-Line-Signature')
+    
+    # 署名検証略（後で追加可能）
+    try:
+        data = json.loads(body)
+        line_bot_api = LineBotApi(user.line_access_token)
+        
+        for event in data.get('events', []):
+            line_user_id = event['source']['userId']
+            
+            # ユーザー情報の取得
+            try:
+                profile = line_bot_api.get_profile(line_user_id)
+                display_name = profile.display_name
+                
+                # マッピングの保存・更新
+                mapping = LineUserMapping.query.filter_by(
+                    line_user_id=line_user_id, 
+                    owner_id=user_id
+                ).first()
+                
+                if not mapping:
+                    mapping = LineUserMapping(
+                        line_user_id=line_user_id,
+                        display_name=display_name,
+                        owner_id=user_id
+                    )
+                    db.session.add(mapping)
+                else:
+                    mapping.display_name = display_name
+                
+                db.session.commit()
+            except Exception as e:
+                app.logger.error(f"Failed to get LINE profile: {e}")
+                
+    except Exception as e:
+        app.logger.error(f"Callback error: {e}")
+        
+    return 'OK'
 
 @app.route('/patients')
 @login_required

@@ -137,6 +137,30 @@
             background: #444;
             cursor: not-allowed;
         }
+        .line-search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            z-index: 100;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .line-search-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 13px;
+        }
+        .line-search-item:hover {
+            background: rgba(6, 199, 85, 0.1);
+            color: #06C755;
+        }
     </style>
 </head>
 <body>
@@ -174,11 +198,12 @@
 
                     <div class="line-area">
                         <label class="memo-label">💬 患者様のLINEへ結果を送信</label>
-                        <div class="line-input-group">
-                            <input type="text" id="line-id-{{ record.id }}" class="line-input" placeholder="LINE User IDを入力" value="{{ record.line_user_id if record.line_user_id else '' }}">
+                        <div class="line-input-group" style="position: relative;">
+                            <input type="text" id="line-id-{{ record.id }}" class="line-input" placeholder="名前を検索、またはIDを入力" value="{{ record.line_user_id if record.line_user_id else '' }}" oninput="searchLineUsers(this, {{ record.id }})">
                             <button class="line-send-btn" onclick="sendToLine({{ record.id }})">
                                 <span>LINEで送る</span>
                             </button>
+                            <div id="search-results-{{ record.id }}" class="line-search-results"></div>
                         </div>
                         <p style="font-size: 11px; color: var(--text-muted); margin: 0;">※Messaging API連携が必要です</p>
                         <span id="line-status-{{ record.id }}" class="status-msg"></span>
@@ -250,8 +275,13 @@
             const sendBtn = lineField.nextElementSibling;
             
             const lineUserId = lineField.value.trim();
-            if (!lineUserId) {
-                alert('LINE User IDを入力してください。');
+            if (!lineUserId || lineUserId.includes(' ')) {
+                // 名前が入っている可能性があるので警告
+                if (lineUserId.length > 0 && !lineUserId.startsWith('U')) {
+                    alert('送信先が正しく選択されていない可能性があります。名前を入力して表示される候補から選択してください。');
+                } else {
+                    alert('LINE User IDを入力してください。');
+                }
                 return;
             }
 
@@ -293,6 +323,58 @@
                 sendBtn.disabled = false;
             }
         }
+
+        let searchTimeout;
+        async function searchLineUsers(input, recordId) {
+            const resultsDiv = document.getElementById(`search-results-${recordId}`);
+            const query = input.value.trim();
+            
+            if (query.length < 1) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/line/search_users?q=${encodeURIComponent(query)}`);
+                    const users = await response.json();
+                    
+                    if (users.length > 0) {
+                        resultsDiv.innerHTML = users.map(user => `
+                            <div class="line-search-item" onclick="selectLineUser('${user.line_user_id}', '${user.display_name}', ${recordId})">
+                                <span style="font-weight: bold;">${user.display_name}</span>
+                                <span style="font-size: 10px; color: #888; float: right;">${user.updated_at}</span>
+                            </div>
+                        `).join('');
+                        resultsDiv.style.display = 'block';
+                    } else {
+                        resultsDiv.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error('Search failed', err);
+                }
+            }, 300);
+        }
+
+        function selectLineUser(id, name, recordId) {
+            const lineField = document.getElementById(`line-id-${recordId}`);
+            const resultsDiv = document.getElementById(`search-results-${recordId}`);
+            
+            lineField.value = id;
+            resultsDiv.style.display = 'none';
+            
+            // 選択したことがわかるように一時的に名前を表示するなどの視覚効果があっても良いが、
+            // フィールドにはIDをセットする必要がある。
+            // プレースホルダーや別のラベルで名前を出すのもあり。
+        }
+
+        // クリック以外で検索窓を閉じる処理
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.line-input-group')) {
+                document.querySelectorAll('.line-search-results').forEach(el => el.style.display = 'none');
+            }
+        });
     </script>
 </body>
 </html>
