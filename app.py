@@ -104,6 +104,23 @@ def init_and_migrate():
                         conn.commit()
                     print("Database migrated: Added patient_id column to analysis_record.")
                 
+                # userテーブルのカラム確認
+                with db.engine.connect() as conn:
+                    result = conn.execute(text("PRAGMA table_info(user)"))
+                    user_columns = [row[1] for row in result]
+                
+                if 'line_access_token' not in user_columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text('ALTER TABLE user ADD COLUMN line_access_token VARCHAR(255)'))
+                        conn.commit()
+                    print("Database migrated: Added line_access_token column to user.")
+                
+                if 'line_channel_secret' not in user_columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text('ALTER TABLE user ADD COLUMN line_channel_secret VARCHAR(100)'))
+                        conn.commit()
+                    print("Database migrated: Added line_channel_secret column to user.")
+
                 # memoカラムチェック
                 if 'memo' not in analysis_columns:
                     with db.engine.connect() as conn:
@@ -129,6 +146,10 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(200), nullable=False)
     is_active_member = db.Column(db.Boolean, default=False) # サブスク有効フラグ
     is_admin = db.Column(db.Boolean, default=False)
+    # LINE連携設定
+    line_access_token = db.Column(db.String(255), nullable=True)
+    line_channel_secret = db.Column(db.String(100), nullable=True)
+    
     # パスワードリセット用
     reset_token = db.Column(db.String(100), unique=True, nullable=True)
     reset_token_expiration = db.Column(db.DateTime, nullable=True)
@@ -261,6 +282,15 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/api/user/settings/line', methods=['POST'])
+@login_required
+def update_line_settings():
+    data = request.json
+    current_user.line_access_token = data.get('line_access_token')
+    current_user.line_channel_secret = data.get('line_channel_secret')
+    db.session.commit()
+    return jsonify({'success': True})
 
 @app.route('/profile')
 @login_required
@@ -670,13 +700,15 @@ def send_line_report():
         return jsonify({'success': False, 'error': '指定された記録が見つかりません。'}), 404
 
     # LINEへのメッセージ送信
-    token = app.config.get('LINE_CHANNEL_ACCESS_TOKEN')
+    # ユーザー個別のトークンを優先、なければ環境変数のトークンを使用
+    token = current_user.line_access_token or app.config.get('LINE_CHANNEL_ACCESS_TOKEN')
+    
     if not token:
-        # トークンが設定されていない場合はモック動作（開発用）
-        app.logger.warning("LINE_CHANNEL_ACCESS_TOKEN is not set. Skipping actual send.")
+        # トークンが全く設定されていない場合はモック動作（開発用）
+        app.logger.warning(f"LINE token is not set for user {current_user.id}. Skipping actual send.")
         record.line_user_id = line_user_id
         db.session.commit()
-        return jsonify({'success': True, 'warning': 'APIトークンが設定されていないため、送信はスキップされました（IDは保存されました）。'})
+        return jsonify({'success': True, 'warning': 'LINE APIトークンが設定されていないため、システム上の記録のみ更新しました。マイページから設定を行うと実際に送信されます。'})
 
     try:
         from linebot import LineBotApi
