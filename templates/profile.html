@@ -145,18 +145,63 @@
                         <input type="text" id="line_channel_secret" name="line_channel_secret" value="{{ user.line_channel_secret if user.line_channel_secret else '' }}" placeholder="1234abcd...">
                     </div>
 
-                    <div class="form-group" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 4px solid #06C755;">
-                        <label style="color: #06C755; font-size: 13px; font-weight: bold; display: block; margin-bottom: 5px;">🔗 LINE Webhook URL</label>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-                            「名前」で送信先を選択できるようにするために、以下のURLをLINE Developersの「Webhook URL」に貼り付けてください。
-                        </p>
-                        <input type="text" readonly value="{{ request.host_url }}callback/{{ user.id }}" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 4px; color: var(--text-bright); padding: 8px; font-size: 11px; font-family: monospace;">
+                    <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05);">
+                        <h3 style="font-size: 14px; color: var(--text-bright); margin-bottom: 15px;">🔧 名前を自動取得するための設定</h3>
+                        
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <button type="button" onclick="switchLinePattern('direct')" id="btn-pattern-direct" class="pattern-tab active">公式LINEのみ</button>
+                            <button type="button" onclick="switchLinePattern('lstep')" id="btn-pattern-lstep" class="pattern-tab">Lステップ併用</button>
+                        </div>
+
+                        <div id="pattern-direct-content" class="pattern-content">
+                            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+                                <span style="color: #06C755; font-weight: bold;">[おすすめ]</span> LINEと直接連携します。追加費用なしで、メッセージを受け取るだけでお名前を自動登録できます。
+                            </p>
+                            <ol style="font-size: 11px; color: var(--text-muted); padding-left: 20px; margin-bottom: 10px;">
+                                <li>下のWebhook URLをコピー</li>
+                                <li>LINE Developersの「Messaging API設定」→「Webhook URL」に貼り付け</li>
+                                <li>「Webhookの利用」を<strong>オン</strong>にする</li>
+                            </ol>
+                        </div>
+
+                        <div id="pattern-lstep-content" class="pattern-content" style="display: none;">
+                            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+                                すでにLステップをお使いの場合の設定です。
+                            </p>
+                            <ol style="font-size: 11px; color: var(--text-muted); padding-left: 20px; margin-bottom: 10px;">
+                                <li>Lステップ管理画面の<strong>「アカウント設定」→「Webhook転送設定」</strong>を開く</li>
+                                <li>下のWebhook URLを登録する</li>
+                            </ol>
+                            <p style="font-size: 10px; color: #ff9f43; margin-bottom: 10px;">
+                                ※Lステップ側の「Webhook転送機能」オプション（有料）が必要です。
+                            </p>
+                        </div>
+
+                        <div style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid var(--border);">
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 5px;">コピー用 Webhook URL</label>
+                            <div style="display: flex; gap: 5px;">
+                                <input type="text" id="webhook-url-input" readonly value="{{ request.host_url }}callback/{{ user.id }}" style="flex: 1; background: transparent; border: none; color: var(--accent); font-size: 11px; font-family: monospace;">
+                                <button type="button" onclick="copyWebhookUrl()" style="background: var(--accent); color: white; border: none; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer;">コピー</button>
+                            </div>
+                        </div>
                     </div>
                     
-                    <button type="submit" class="primary-btn" style="width: 100%; margin-top: 10px; background: #06C755;">
+                    <button type="submit" class="primary-btn" style="width: 100%; margin-top: 20px; background: #06C755;">
                         LINE連携設定を保存
                     </button>
                 </form>
+
+                <style>
+                    .pattern-tab {
+                        flex: 1; padding: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s;
+                    }
+                    .pattern-tab.active {
+                        background: rgba(6, 199, 85, 0.1); border-color: #06C755; color: #06C755;
+                    }
+                    .pattern-content {
+                        background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; margin-bottom: 15px;
+                    }
+                </style>
             </section>
 
             <section class="card" style="margin-top: 30px;">
@@ -301,6 +346,20 @@
         });
 
         // ─── LINE ユーザーマッピング機能 ──────────────────────────────────────────
+
+        function switchLinePattern(pattern) {
+            document.getElementById('btn-pattern-direct').classList.toggle('active', pattern === 'direct');
+            document.getElementById('btn-pattern-lstep').classList.toggle('active', pattern === 'lstep');
+            document.getElementById('pattern-direct-content').style.display = pattern === 'direct' ? 'block' : 'none';
+            document.getElementById('pattern-lstep-content').style.display = pattern === 'lstep' ? 'block' : 'none';
+        }
+
+        function copyWebhookUrl() {
+            const input = document.getElementById('webhook-url-input');
+            input.select();
+            document.execCommand('copy');
+            alert('Webhook URLをコピーしました');
+        }
 
         async function loadMappings() {
             const listDiv = document.getElementById('mappingList');
