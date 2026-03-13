@@ -255,6 +255,9 @@ class AnalysisRecord(db.Model):
     image_filename = db.Column(db.String(255), nullable=True)
     input_filename = db.Column(db.String(255), nullable=True)
     
+    # 追記：AIアドバイス
+    advice = db.Column(db.Text, nullable=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 @login_manager.user_loader
@@ -707,6 +710,59 @@ def admin_export_csv():
     response.headers["Content-type"] = "text/csv; charset=utf-8-sig"
     return response
 
+def generate_advice(record):
+    """
+    解析レコードの数値に基づいて、日本語のアドバイスを生成する
+    """
+    advices = []
+    
+    # 正面解析のアドバイス
+    if record.view_type == 'front':
+        # 肩の傾き
+        if record.shoulder_angle and abs(record.shoulder_angle) > 3.0:
+            advices.append("肩の左右バランスに傾きが見られます。片側の筋肉の緊張や、鞄の持ち方の癖などが影響している可能性があります。")
+        elif record.shoulder_angle and abs(record.shoulder_angle) > 1.5:
+            advices.append("肩のラインにわずかな左右差があります。ストレッチや日常の姿勢に気をつけましょう。")
+        
+        # 骨盤の傾き
+        if record.pelvis_angle and abs(record.pelvis_angle) > 3.0:
+            advices.append("骨盤の傾きが顕著です。腰痛や膝への負担に繋がるほか、足の長さの左右差を感じる原因になります。")
+        elif record.pelvis_angle and abs(record.pelvis_angle) > 1.5:
+            advices.append("骨盤に少し傾きがあります。座り方（足を組む等）の習慣を見直すのが効果的です。")
+        
+        # 頭の傾き
+        if record.head_angle and abs(record.head_angle) > 3.0:
+            advices.append("頭部の傾きが大きく、首すじの筋肉（胸鎖乳突筋など）に負担がかかりやすい状態です。")
+            
+    # 側面解析のアドバイス
+    elif record.view_type == 'side':
+        # FHP (首の突き出し)
+        if record.fhp_pct and record.fhp_pct > 10.0:
+            advices.append("頭部が前方へ強く突き出しています（スマホ首）。首や肩こり、頭痛の主な原因となります。アゴを引く意識が大切です。")
+        elif record.fhp_pct and record.fhp_pct > 5.0:
+            advices.append("頭がやや前方に出る傾向があります。デスクワーク時のディスプレイの高さなどを調整してみましょう。")
+            
+        # 巻肩 (RS)
+        if record.rs_pct and record.rs_pct > 15.0:
+            advices.append("強い巻き肩の状態です。胸の筋肉が縮み、呼吸が浅くなったり、背中が張りやすくなったりします。")
+        elif record.rs_pct and record.rs_pct > 8.0:
+            advices.append("少し巻き肩気味です。肩甲骨を寄せるように胸を開くストレッチが有効です。")
+            
+        # 体幹のズレ
+        if record.trunk_pct and abs(record.trunk_pct) > 5.0:
+            advices.append("重心が前後にズレており、腰や足裏への負担が不均等になっています。")
+
+    # 共通の締めくくり
+    if not advices:
+        if record.view_type == 'compare':
+            advices.append("比較解析を行いました。以前の状態（左）と今回の状態（右）の変化を確認してください。")
+        else:
+            advices.append("全体的に非常に良好な姿勢です。この状態を維持していきましょう！")
+    else:
+        advices.append("まずは意識して姿勢を正すことから始め、定期的なメンテナンスをお勧めします。")
+        
+    return "\n".join(advices)
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'image' not in request.files:
@@ -760,6 +816,10 @@ def analyze():
                     image_filename=cloud_url if cloud_url else f"report_{filename}",
                     input_filename=input_cloud_url if input_cloud_url else f"input_{filename}"
                 )
+                
+                # AIアドバイス生成
+                record.advice = generate_advice(record)
+                
                 db.session.add(record)
             except Exception as e:
                 print(f"Failed to save numerical data: {e}")
@@ -768,7 +828,8 @@ def analyze():
             
             return jsonify({
                 'success': True,
-                'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/report_{filename}')
+                'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/report_{filename}'),
+                'advice': record.advice
             })
         else:
             return jsonify({'success': False, 'error': '人物が検出されませんでした。'}), 200
@@ -1062,6 +1123,10 @@ def compare():
                     image_filename=c_url if c_url else os.path.basename(output_path),
                     input_filename=i_url if i_url else (os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a))
                 )
+                
+                # アドバイス
+                record.advice = generate_advice(record)
+                
                 db.session.add(record)
 
             try:
@@ -1074,7 +1139,8 @@ def compare():
 
             return jsonify({
                 'success': True,
-                'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg')
+                'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg'),
+                'advice': "比較解析を行いました。以前の状態（左）と今回の状態（右）の変化を確認してください。"
             })
         else:
             return jsonify({'success': False, 'error': '人物の検出に失敗しました。'}), 200

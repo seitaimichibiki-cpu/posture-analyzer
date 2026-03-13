@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>整体院 導 ｜ AI 姿勢解析システム</title>
+    <title>整体院 導 ｜ AI 姿勢解析システム (v2.1)</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -12,55 +12,7 @@
     <meta name="theme-color" content="#080a12">
     <link rel="apple-touch-icon" href="/static/icon-512.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-        /* Guide Overlay Styles */
-        .preview-area { position: relative; overflow: hidden; }
-        .guide-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-            display: none;
-            z-index: 10;
-        }
-        .guide-line { position: absolute; background: rgba(0, 255, 255, 0.4); }
-        .v-center { left: 50%; top: 0; bottom: 0; width: 1.5px; background: rgba(0, 255, 255, 0.6); }
-        .h-line-1 { top: 33%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
-        .h-line-2 { top: 66%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
-        
-        .guide-control {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 36px;
-            height: 20px;
-        }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #333;
-            transition: .3s;
-            border-radius: 20px;
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 14px; width: 14px;
-            left: 3px; bottom: 3px;
-            background-color: white;
-            transition: .3s;
-            border-radius: 50%;
-        }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(16px); }
-        .guide-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
-    </style>
+</head>
 <body>
     <div class="container">
         <header>
@@ -160,45 +112,48 @@
                     </div>
                 </div>
 
-                <div class="actions-footer">
+                <div class="actions" style="margin-top: 24px;">
                     <div class="form-group" style="margin-bottom: 15px; position: relative;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
                             <label for="patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
                             <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
                         </div>
                         <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off">
-                        <div id="patient-search-results" class="line-search-results"></div>
+                        <!-- オートコンプリートの結果表示用 -->
+                        <div id="patient-search-results" class="line-search-results" style="display: none;"></div>
                     </div>
-                    <button id="btnAnalyze" class="analyze-btn" disabled onclick="handleExecution()">🚀 解析を実行</button>
+                    <button id="btnAnalyze" class="analyze-btn" onclick="analyze()" disabled>🚀 解析を開始する</button>
+                    <button class="primary-btn" onclick="reset()" style="margin-top: 10px; font-size: 13px; padding: 12px; opacity: 0.7;">🔄 リセット</button>
                 </div>
-            </section>
+            </div>
 
             <!-- Loading Overlay -->
-      <!-- ローディング表示用 (高級感アップ) -->
-    <div id="loadingOverlay" class="overlay" style="display: none;">
-        <div class="loader-content">
-            <div class="spinner"></div>
-            <p style="font-weight: 700; letter-spacing: 1px; margin-bottom: 8px;">AI ANALYSIS IN PROGRESS</p>
-            <span>高度な骨格検出を実行中...</span>
-            <span>（約5〜10秒ほどかかります）</span>
-        </div>
-    </div>
+            <div id="loadingOverlay" class="overlay" style="display: none;">
+                <div style="text-align: center;">
+                    <div class="spinner"></div>
+                    <p style="font-weight: 700; letter-spacing: 1px; margin-bottom: 8px;">AI ANALYSIS IN PROGRESS</p>
+                    <p style="font-size: 13px; color: var(--text-muted);">姿勢の歪みをミリメートル単位で測定中...</p>
+                </div>
+            </div>
 
-            <!-- Result Section -->
             <section id="resultSection" class="result-section" style="display: none;">
-                <div class="card result-card">
-                    <h2>解析レポート</h2>
-                    <div class="report-wrapper">
-                                <img id="resultImage" src="" alt="Analysis Report">
-                            </div>
-                            <p class="guide-text">※画像を長押しして保存することもできます</p>
-                            <div class="result-actions">
-                                <a id="downloadBtn" href="" download="姿勢解析レポート.jpg" class="secondary-btn">💾 画像を保存</a>
-                        <button class="text-btn" onclick="reset()">✨ 別の解析をする</button>
-                    </div>
+                <div class="report-wrapper">
+                    <img id="resultImage" src="" alt="Analysis Result">
+                </div>
+                
+                <!-- アドバイス表示領域 -->
+                <div id="adviceCard" class="card result-card" style="display: none; border-left: 4px solid var(--accent); margin-top: 15px;">
+                    <h3 style="font-size: 16px; margin-bottom: 12px; color: var(--accent); display: flex; align-items: center; gap: 8px;">
+                        <span>✨</span> AIからのアドバイス
+                    </h3>
+                    <p id="adviceText" style="font-size: 14px; line-height: 1.6; color: var(--text-muted); white-space: pre-wrap; margin: 0;"></p>
+                </div>
+
+                <div class="actions">
+                    <a id="downloadBtn" href="#" class="secondary-btn">📩 解析レポートを保存</a>
                 </div>
             </section>
-            
+
             <div style="text-align: center; margin-top: 20px;">
                 <a href="{{ url_for('support') }}" style="color: var(--text-muted); text-decoration: none; font-size: 12px; opacity: 0.8;">お問い合わせ</a>
             </div>
@@ -206,152 +161,91 @@
     </div>
 
     <script>
-        let currentView = 'front';
+        let viewMode = 'front';
         let fileSingle = null;
         let fileB = null;
         let fileA = null;
 
         function setView(view) {
-            currentView = view;
-            document.getElementById('btnFront').classList.toggle('active', view === 'front');
-            document.getElementById('btnSide').classList.toggle('active', view === 'side');
-            document.getElementById('btnCompare').classList.toggle('active', view === 'compare');
-            
+            viewMode = view;
+            document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+            if (view === 'front') document.getElementById('btnFront').classList.add('active');
+            if (view === 'side') document.getElementById('btnSide').classList.add('active');
+            if (view === 'compare') document.getElementById('btnCompare').classList.add('active');
+
             document.getElementById('singleModeArea').style.display = view === 'compare' ? 'none' : 'block';
             document.getElementById('compareModeArea').style.display = view === 'compare' ? 'flex' : 'none';
-
             checkReady();
         }
 
-        const handleFileSelect = (e) => {
-            const file = e.target.files[0];
+        document.getElementById('fileInputCamera').onchange = e => handleFile(e.target.files[0], 'single');
+        document.getElementById('fileInputLibrary').onchange = e => handleFile(e.target.files[0], 'single');
+        document.getElementById('fileCompB').onchange = e => handleFile(e.target.files[0], 'before');
+        document.getElementById('fileCompA').onchange = e => handleFile(e.target.files[0], 'after');
+
+        async function handleFile(file, type) {
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (re) => {
+            const resized = await resizeImage(file, 1200);
+            const url = URL.createObjectURL(resized);
+
+            if (type === 'single') {
+                fileSingle = resized;
                 const targetImg = document.getElementById('imagePreview');
-                targetImg.src = re.target.result;
+                targetImg.src = url;
                 targetImg.style.display = 'block';
                 document.querySelector('#singleModeArea .default-msg').style.display = 'none';
-                fileSingle = file;
-                checkReady();
-            };
-            reader.readAsDataURL(file);
-        };
-
-        const handleCompB = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (re) => {
-                document.getElementById('prevB').src = re.target.result;
+            } else if (type === 'before') {
+                fileB = resized;
+                document.getElementById('prevB').src = url;
                 document.getElementById('prevB').style.display = 'block';
                 document.getElementById('msgB').style.display = 'none';
-                fileB = file;
-                checkReady();
-            };
-            reader.readAsDataURL(file);
-        };
-
-        const handleCompA = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (re) => {
-                document.getElementById('prevA').src = re.target.result;
+            } else if (type === 'after') {
+                fileA = resized;
+                document.getElementById('prevA').src = url;
                 document.getElementById('prevA').style.display = 'block';
                 document.getElementById('msgA').style.display = 'none';
-                fileA = file;
-                checkReady();
-            };
-            reader.readAsDataURL(file);
-        };
+            }
+            checkReady();
+        }
 
         function checkReady() {
             const btn = document.getElementById('btnAnalyze');
-            if (currentView === 'compare') {
+            if (viewMode === 'compare') {
                 btn.disabled = !(fileB && fileA);
             } else {
                 btn.disabled = !fileSingle;
             }
         }
 
-        document.getElementById('fileInputCamera').onchange = handleFileSelect;
-        document.getElementById('fileInputLibrary').onchange = handleFileSelect;
-        document.getElementById('fileCompB').onchange = handleCompB;
-        document.getElementById('fileCompA').onchange = handleCompA;
-
-        async function handleExecution() {
-            if (currentView === 'compare') {
-                await startComparison();
-            } else {
-                await startAnalysis();
-            }
-        }
-
-        async function startAnalysis() {
-            if (!fileSingle) return;
-
-            document.getElementById('loadingOverlay').style.display = 'flex';
-            document.getElementById('resultSection').style.display = 'none';
-
+        async function analyze() {
+            const formData = new FormData();
+            formData.append('patient_id', document.getElementById('patient_id').value);
+            
             try {
-                // --- クライアント側でリサイズ処理 (メモリ節約のため) ---
-                const resizedBlob = await resizeImage(fileSingle, 600);
-                
-                const formData = new FormData();
-                formData.append('image', resizedBlob, 'upload.jpg');
-                formData.append('view_type', currentView);
-                formData.append('patient_id', document.getElementById('patient_id').value);
+                document.getElementById('loadingOverlay').style.display = 'flex';
+                document.getElementById('resultSection').style.display = 'none';
 
-                // クラウド環境（Render）の無料プランは最初の起動に時間がかかるため
-                // 明示的に "/analyze" への相対パスでリクエストを送る
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
+                let response;
+                if (viewMode === 'compare') {
+                    formData.append('image_before', fileB);
+                    formData.append('image_after', fileA);
+                    formData.append('view_type', 'side'); // 比較は側面固定想定
+                    response = await fetch('/compare', { method: 'POST', body: formData });
+                } else {
+                    formData.append('image', fileSingle);
+                    formData.append('view_type', viewMode);
+                    response = await fetch('/analyze', { method: 'POST', body: formData });
+                }
+
                 const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(`Server Error: ${response.status} ${data.error || ''}`);
+                if (response.status === 403) {
+                    alert(data.error);
+                    location.href = '/support';
+                    return;
                 }
                 handleResult(data);
             } catch (err) {
-                alert(`解析エラーが発生しました。\n内容: ${err.message}\n\n※サーバーが起動中の可能性があります。数分待ってから「再読み込み」してお試しください。`);
-                console.error(err);
-            } finally {
-                document.getElementById('loadingOverlay').style.display = 'none';
-            }
-        }
-
-        async function startComparison() {
-            if (!(fileB && fileA)) return;
-
-            document.getElementById('loadingOverlay').style.display = 'flex';
-            document.getElementById('resultSection').style.display = 'none';
-
-            try {
-                const resizedBlobB = await resizeImage(fileB, 600);
-                const resizedBlobA = await resizeImage(fileA, 600);
-
-                const formData = new FormData();
-                formData.append('image_before', resizedBlobB, 'before.jpg');
-                formData.append('image_after', resizedBlobA, 'after.jpg');
-                formData.append('view_type', 'auto');
-                formData.append('patient_id', document.getElementById('patient_id').value);
-
-                const response = await fetch('/compare', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(`Server Error: ${response.status} ${data.error || ''}`);
-                }
-                handleResult(data);
-            } catch (err) {
-                alert(`比較解析エラーが発生しました。\n内容: ${err.message}\n\n※サーバーが起動中の可能性があります。数分待ってから「再読み込み」してお試しください。`);
-                console.error(err);
+                alert('解析に失敗しました。');
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
             }
@@ -360,10 +254,13 @@
         function handleResult(data) {
             if (data.success) {
                 const filename = data.report_url.split('/').pop();
-                const reportUrl = data.report_url + '?t=' + Date.now();
-                document.getElementById('resultImage').src = reportUrl;
-                const downloadBtn = document.getElementById('downloadBtn');
-                downloadBtn.href = window.location.origin + '/download/' + filename;
+                document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
+                document.getElementById('downloadBtn').href = '/download/' + filename;
+                
+                if (data.advice) {
+                    document.getElementById('adviceText').textContent = data.advice;
+                    document.getElementById('adviceCard').style.display = 'block';
+                }
                 document.getElementById('resultSection').style.display = 'block';
                 document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
             } else {
@@ -371,152 +268,54 @@
             }
         }
 
-        // 画像をリサイズするユーティリティ関数
         function resizeImage(file, maxSide) {
             return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        let w = img.width;
-                        let h = img.height;
-                        if (w > h && w > maxSide) {
-                            h = (h * maxSide) / w;
-                            w = maxSide;
-                        } else if (h > maxSide) {
-                            w = (w * maxSide) / h;
-                            h = maxSide;
-                        }
-                        const canvas = document.createElement('canvas');
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
-                        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8);
-                    };
-                    img.src = e.target.result;
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width, h = img.height;
+                    if (w > h && w > maxSide) { h *= maxSide / w; w = maxSide; }
+                    else if (h > maxSide) { w *= maxSide / h; h = maxSide; }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
                 };
-                reader.readAsDataURL(file);
+                img.src = URL.createObjectURL(file);
             });
         }
 
         function reset() {
-            fileSingle = null; fileB = null; fileA = null;
-            document.querySelectorAll('input[type="file"]').forEach(i => i.value = '');
-            document.getElementById('imagePreview').style.display = 'none';
-            document.getElementById('prevB').style.display = 'none';
-            document.getElementById('prevA').style.display = 'none';
-            document.querySelectorAll('.default-msg').forEach(m => m.style.display = 'flex');
-            document.getElementById('btnAnalyze').disabled = true;
-            document.getElementById('resultSection').style.display = 'none';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            location.reload();
         }
 
-        // --- Patient Autocomplete Logic ---
-        let patientSearchTimeout;
-        let selectedPatientIdx = -1;
-
-        const patientInput = document.getElementById('patient_id');
-        const patientResults = document.getElementById('patient-search-results');
-
-        patientInput.addEventListener('input', () => {
-            const query = patientInput.value.trim();
-            if (query.length < 1) {
-                patientResults.style.display = 'none';
-                return;
-            }
-
-            clearTimeout(patientSearchTimeout);
-            patientSearchTimeout = setTimeout(async () => {
-                try {
-                    const response = await fetch(`/api/patients/search?q=${encodeURIComponent(query)}`);
-                    const patients = await response.json();
-                    
-                    if (patients.length > 0) {
-                        selectedPatientIdx = -1;
-                        patientResults.innerHTML = patients.map((name, idx) => `
-                            <div class="line-search-item patient-suggest-item" data-idx="${idx}" onclick="selectPatient('${name}')">
-                                <span>${name}</span>
-                            </div>
-                        `).join('');
-                        patientResults.style.display = 'block';
-                    } else {
-                        patientResults.style.display = 'none';
-                    }
-                } catch (err) {
-                    console.error('Patient search failed', err);
-                }
-            }, 300);
-        });
-
-        patientInput.addEventListener('keydown', (e) => {
-            const items = document.querySelectorAll('.patient-suggest-item');
-            if (patientResults.style.display === 'none' || items.length === 0) return;
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                selectedPatientIdx = (selectedPatientIdx + 1) % items.length;
-                updateSelection(items);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                selectedPatientIdx = (selectedPatientIdx - 1 + items.length) % items.length;
-                updateSelection(items);
-            } else if (e.key === 'Enter' && selectedPatientIdx >= 0) {
-                e.preventDefault();
-                selectPatient(items[selectedPatientIdx].textContent.trim());
-            }
-        });
-
-        function updateSelection(items) {
-            items.forEach((item, idx) => {
-                item.style.background = idx === selectedPatientIdx ? 'rgba(6, 199, 85, 0.1)' : '';
-                item.style.color = idx === selectedPatientIdx ? '#06C755' : '';
-                if (idx === selectedPatientIdx) item.scrollIntoView({ block: 'nearest' });
-            });
-        }
-
-        function selectPatient(name) {
-            patientInput.value = name;
-            patientResults.style.display = 'none';
-        }
+        // --- Autocomplete Logic ---
+        const pi = document.getElementById('patient_id');
+        const pr = document.getElementById('patient-search-results');
+        pi.oninput = async () => {
+            const q = pi.value.trim();
+            if (q.length < 1) { pr.style.display = 'none'; return; }
+            const res = await fetch(`/api/patients/search?q=${encodeURIComponent(q)}`);
+            const pts = await res.json();
+            if (pts.length > 0) {
+                pr.innerHTML = pts.map(n => `<div class="line-search-item" onclick="selectPt('${n}')">${n}</div>`).join('');
+                pr.style.display = 'block';
+            } else { pr.style.display = 'none'; }
+        };
+        function selectPt(n) { pi.value = n; pr.style.display = 'none'; }
 
         function toggleGuide(show) {
-            const overlays = document.querySelectorAll('.guide-overlay');
-            overlays.forEach(el => el.style.display = show ? 'block' : 'none');
-            // 状態を保存
+            document.querySelectorAll('.guide-overlay').forEach(el => el.style.display = show ? 'block' : 'none');
             localStorage.setItem('show_guide', show);
         }
 
-        // 初期表示設定
-        window.addEventListener('load', () => {
+        window.onload = () => {
             const saved = localStorage.getItem('show_guide') === 'true';
             document.getElementById('guideToggle').checked = saved;
             toggleGuide(saved);
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.form-group')) {
-                patientResults.style.display = 'none';
-            }
-        });
+        };
     </script>
     <footer style="margin-top: 60px; padding: 30px 20px; text-align: center; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted);">
-        <div style="margin-bottom: 10px;">
-            <a href="{{ url_for('terms') }}" style="color: var(--text-muted); text-decoration: none; margin: 0 10px;">利用規約</a>
-            <a href="{{ url_for('privacy') }}" style="color: var(--text-muted); text-decoration: none; margin: 0 10px;">プライバシーポリシー</a>
-        </div>
         <div>&copy; 2026 整体院 導 AI姿勢解析システム</div>
     </footer>
-
-    <script>
-        // PWA Service Worker Registration
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/static/sw.js')
-                    .then(reg => console.log('SW registered'))
-                    .catch(err => console.log('SW failed', err));
-            });
-        }
-    </script>
 </body>
 </html>

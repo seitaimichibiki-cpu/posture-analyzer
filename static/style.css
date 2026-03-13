@@ -363,3 +363,63 @@ footer:hover { opacity: 1; }
     h1 { font-size: 24px; }
     .report-wrapper { margin-left: -20px; margin-right: -20px; border-radius: 0; }
 }
+
+/* Guide Overlay Styles */
+.preview-area { position: relative; overflow: hidden; }
+.guide-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    display: none;
+    z-index: 10;
+}
+.guide-line { position: absolute; background: rgba(0, 255, 255, 0.4); }
+.v-center { left: 50%; top: 0; bottom: 0; width: 1.5px; background: rgba(0, 255, 255, 0.6); }
+.h-line-1 { top: 33%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
+.h-line-2 { top: 66%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
+
+.guide-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #333;
+    transition: .3s;
+    border-radius: 20px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px; width: 14px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+input:checked + .slider { background-color: var(--accent); }
+input:checked + .slider:before { transform: translateX(16px); }
+.guide-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+
+.advice-box {
+    background: rgba(79, 172, 254, 0.05);
+    border: 1px solid rgba(79, 172, 254, 0.15);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 15px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #b4c6ef;
+}

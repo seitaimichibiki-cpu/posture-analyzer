@@ -280,6 +280,15 @@
                     </div>
                     {% endif %}
 
+                    {% if record.advice %}
+                    <div class="advice-box">
+                        <div style="font-size: 11px; color: var(--accent); margin-bottom: 6px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                            <span>✨</span> AIアドバイス
+                        </div>
+                        <div style="white-space: pre-wrap;">{{ record.advice }}</div>
+                    </div>
+                    {% endif %}
+
                     <div class="memo-area">
                         <label class="memo-label">📝 施術・状態メモ</label>
                         <textarea id="memo-field-{{ record.id }}" class="memo-input" placeholder="例：首の張りが強い。施術後、肩のラインが改善。">{{ record.memo if record.memo else '' }}</textarea>
