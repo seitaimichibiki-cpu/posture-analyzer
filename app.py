@@ -11,6 +11,8 @@ from sqlalchemy import text, inspect
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
+import cloudinary
+import cloudinary.uploader
 
 # 姿勢解析エンジンのインポート
 from pose_analyzer import PoseAnalyzer
@@ -43,6 +45,29 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', 'seitaimichi
 # LINE Messaging API 設定
 app.config['LINE_CHANNEL_ACCESS_TOKEN'] = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
 app.config['LINE_CHANNEL_SECRET'] = os.environ.get('LINE_CHANNEL_SECRET', '')
+
+# Cloudinary設定 (環境変数 CLOUDINARY_URL または個別キーを使用)
+cloudinary_url_env = os.environ.get('CLOUDINARY_URL')
+if cloudinary_url_env:
+    cloudinary.config(cloudinary_url=cloudinary_url_env, secure=True)
+else:
+    cloudinary.config(
+        cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.environ.get('CLOUDINARY_API_KEY'),
+        api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
+        secure=True
+    )
+
+def upload_to_cloudinary(file_path):
+    """画像をCloudinaryにアップロードし、URLを返す。設定がない場合はNoneを返す。"""
+    if not (os.environ.get('CLOUDINARY_URL') or os.environ.get('CLOUDINARY_CLOUD_NAME')):
+        return None
+    try:
+        result = cloudinary.uploader.upload(file_path, folder="posture-reports")
+        return result.get('secure_url')
+    except Exception as e:
+        print(f"Cloudinary upload failed: {e}")
+        return None
 
 mail = Mail(app)
 
@@ -687,6 +712,10 @@ def analyze():
         res = get_analyzer().analyze(input_path, output_path, view_type=view_type)
 
         if res and res.get('success'):
+            # Cloudinaryへのアップロード
+            cloud_url = upload_to_cloudinary(output_path)
+            input_cloud_url = upload_to_cloudinary(input_path)
+
             # ログ記録
             log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type=res.get('view', view_type))
             db.session.add(log)
@@ -708,8 +737,8 @@ def analyze():
                     rs_pct=data.get('rs_pct'),
                     side_pelvis_angle=data.get('pelvis_angle') if res.get('view') == 'side' else None,
                     trunk_pct=data.get('trunk_pct'),
-                    image_filename=f"report_{filename}",
-                    input_filename=f"input_{filename}"
+                    image_filename=cloud_url if cloud_url else f"report_{filename}",
+                    input_filename=input_cloud_url if input_cloud_url else f"input_{filename}"
                 )
                 db.session.add(record)
             except Exception as e:
@@ -719,7 +748,7 @@ def analyze():
             
             return jsonify({
                 'success': True,
-                'report_url': url_for('static', filename=f'uploads/report_{filename}')
+                'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/report_{filename}')
             })
         else:
             return jsonify({'success': False, 'error': '人物が検出されませんでした。'}), 200
@@ -990,6 +1019,12 @@ def compare():
                 # items is a list of {"n": name, "v": value, "s": score}
                 # mapping to columns
                 d = {it['n']: it['v'] for it in items}
+                # Cloudinaryへのアップロード
+                c_url = upload_to_cloudinary(output_path)
+                # Before/Afterに応じて入力を選択
+                source_path = path_b if prefix_type == 'before' else path_a
+                i_url = upload_to_cloudinary(source_path)
+
                 record = AnalysisRecord(
                     user_id=current_user.id if current_user.is_authenticated else None,
                     patient_id=patient_id,
@@ -1004,8 +1039,8 @@ def compare():
                     rs_pct=d.get('ラウンド肩'),
                     # side_pelvis_angle は pelvis_angle と共通化
                     trunk_pct=d.get('体幹領域') or d.get('体幹ライン'),
-                    image_filename=os.path.basename(output_path),
-                    input_filename=os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a)
+                    image_filename=c_url if c_url else os.path.basename(output_path),
+                    input_filename=i_url if i_url else (os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a))
                 )
                 db.session.add(record)
 
