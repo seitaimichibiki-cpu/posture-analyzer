@@ -12,8 +12,55 @@
     <meta name="theme-color" content="#080a12">
     <link rel="apple-touch-icon" href="/static/icon-512.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-</head>
+        /* Guide Overlay Styles */
+        .preview-area { position: relative; overflow: hidden; }
+        .guide-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+        }
+        .guide-line { position: absolute; background: rgba(0, 255, 255, 0.4); }
+        .v-center { left: 50%; top: 0; bottom: 0; width: 1.5px; background: rgba(0, 255, 255, 0.6); }
+        .h-line-1 { top: 33%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
+        .h-line-2 { top: 66%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
+        
+        .guide-control {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #333;
+            transition: .3s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px; width: 14px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); }
+        .guide-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+    </style>
 <body>
     <div class="container">
         <header>
@@ -53,7 +100,19 @@
                 </div>
 
                 <div id="singleModeArea" class="card photo-card">
+                    <div class="guide-control">
+                        <span class="guide-label">撮影ガイド表示</span>
+                        <label class="switch">
+                            <input type="checkbox" id="guideToggle" onchange="toggleGuide(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                     <div id="previewArea" class="preview-area">
+                        <div class="guide-overlay">
+                            <div class="guide-line v-center"></div>
+                            <div class="guide-line h-line-1"></div>
+                            <div class="guide-line h-line-2"></div>
+                        </div>
                         <div class="default-msg">
                             <span class="icon">📸</span>
                             <p>解析する写真を撮影または選択してください</p>
@@ -76,6 +135,11 @@
                     <div class="card photo-card comp-card">
                         <p class="comp-label">Before (以前)</p>
                         <div class="preview-area small" onclick="document.getElementById('fileCompB').click()">
+                            <div class="guide-overlay">
+                                <div class="guide-line v-center"></div>
+                                <div class="guide-line h-line-1"></div>
+                                <div class="guide-line h-line-2"></div>
+                            </div>
                             <div id="msgB" class="default-msg"><span>📸</span></div>
                             <img id="prevB" src="" style="display: none;">
                         </div>
@@ -84,6 +148,11 @@
                     <div class="card photo-card comp-card">
                         <p class="comp-label">After (今回)</p>
                         <div class="preview-area small" onclick="document.getElementById('fileCompA').click()">
+                            <div class="guide-overlay">
+                                <div class="guide-line v-center"></div>
+                                <div class="guide-line h-line-1"></div>
+                                <div class="guide-line h-line-2"></div>
+                            </div>
                             <div id="msgA" class="default-msg"><span>📸</span></div>
                             <img id="prevA" src="" style="display: none;">
                         </div>
@@ -410,6 +479,20 @@
             patientInput.value = name;
             patientResults.style.display = 'none';
         }
+
+        function toggleGuide(show) {
+            const overlays = document.querySelectorAll('.guide-overlay');
+            overlays.forEach(el => el.style.display = show ? 'block' : 'none');
+            // 状態を保存
+            localStorage.setItem('show_guide', show);
+        }
+
+        // 初期表示設定
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('show_guide') === 'true';
+            document.getElementById('guideToggle').checked = saved;
+            toggleGuide(saved);
+        });
 
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.form-group')) {
