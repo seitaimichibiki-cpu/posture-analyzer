@@ -161,6 +161,42 @@
             background: rgba(6, 199, 85, 0.1);
             color: #06C755;
         }
+        .report-preview {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .report-img-wrapper {
+            position: relative;
+            width: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .report-img-wrapper:hover {
+            transform: scale(1.05);
+            border-color: var(--accent);
+        }
+        .report-img-wrapper img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            display: block;
+        }
+        .img-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 10px;
+            padding: 4px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -182,6 +218,21 @@
                         <div class="history-date">{{ record.created_at.strftime('%Y年%m月%d日 %H:%M') }}</div>
                         <div class="history-type">{{ '正面' if record.view_type == 'front' else '側面' if record.view_type == 'side' else '比較' }}</div>
                     </div>
+
+                    {% if record.image_filename %}
+                    <div class="report-preview">
+                        <div class="report-img-wrapper" onclick="window.open('{{ url_for('static', filename='uploads/' + record.image_filename) }}', '_blank')">
+                            <img src="{{ url_for('static', filename='uploads/' + record.image_filename) }}" alt="解析レポート">
+                            <div class="img-label">解析レポート</div>
+                        </div>
+                        {% if record.input_filename %}
+                        <div class="report-img-wrapper" onclick="window.open('{{ url_for('static', filename='uploads/' + record.input_filename) }}', '_blank')">
+                            <img src="{{ url_for('static', filename='uploads/' + record.input_filename) }}" alt="元画像">
+                            <div class="img-label">撮影した画像</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
 
                     <div class="memo-area">
                         <label class="memo-label">📝 施術・状態メモ</label>

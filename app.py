@@ -137,12 +137,19 @@ def init_and_migrate():
                         conn.commit()
                     print("Database migrated: Added memo column to analysis_record.")
                 
-                # line_user_idカラムチェック
                 if 'line_user_id' not in analysis_columns:
                     with db.engine.connect() as conn:
                         conn.execute(text('ALTER TABLE analysis_record ADD COLUMN line_user_id VARCHAR(100)'))
                         conn.commit()
                     print("Database migrated: Added line_user_id column to analysis_record.")
+                
+                # 画像パス用カラムチェック
+                if 'image_filename' not in analysis_columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text('ALTER TABLE analysis_record ADD COLUMN image_filename VARCHAR(255)'))
+                        conn.execute(text('ALTER TABLE analysis_record ADD COLUMN input_filename VARCHAR(255)'))
+                        conn.commit()
+                    print("Database migrated: Added image/input_filename columns to analysis_record.")
                 # LineUserMappingテーブル作成
                 with db.engine.connect() as conn:
                     conn.execute(text('''
@@ -218,6 +225,10 @@ class AnalysisRecord(db.Model):
     
     # 追記：LINE連携用
     line_user_id = db.Column(db.String(100), nullable=True)
+    
+    # 追記：画像パス保存用
+    image_filename = db.Column(db.String(255), nullable=True)
+    input_filename = db.Column(db.String(255), nullable=True)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -696,7 +707,9 @@ def analyze():
                     fhp_pct=data.get('fhp_pct'),
                     rs_pct=data.get('rs_pct'),
                     side_pelvis_angle=data.get('pelvis_angle') if res.get('view') == 'side' else None,
-                    trunk_pct=data.get('trunk_pct')
+                    trunk_pct=data.get('trunk_pct'),
+                    image_filename=f"report_{filename}",
+                    input_filename=f"input_{filename}"
                 )
                 db.session.add(record)
             except Exception as e:
@@ -990,7 +1003,9 @@ def compare():
                     fhp_pct=d.get('FHP'),
                     rs_pct=d.get('ラウンド肩'),
                     # side_pelvis_angle は pelvis_angle と共通化
-                    trunk_pct=d.get('体幹領域') or d.get('体幹ライン')
+                    trunk_pct=d.get('体幹領域') or d.get('体幹ライン'),
+                    image_filename=os.path.basename(output_path),
+                    input_filename=os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a)
                 )
                 db.session.add(record)
 
