@@ -97,6 +97,46 @@
             margin-left: 10px;
             display: none;
         }
+        .line-area {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+        .line-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .line-input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-bright);
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+        .line-send-btn {
+            background: #06C755; /* LINE Green */
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: transform 0.2s;
+        }
+        .line-send-btn:hover {
+            transform: scale(1.02);
+        }
+        .line-send-btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -130,6 +170,18 @@
                             </div>
                             <button class="delete-btn" onclick="deleteRecord({{ record.id }})">削除</button>
                         </div>
+                    </div>
+
+                    <div class="line-area">
+                        <label class="memo-label">💬 患者様のLINEへ結果を送信</label>
+                        <div class="line-input-group">
+                            <input type="text" id="line-id-{{ record.id }}" class="line-input" placeholder="LINE User IDを入力" value="{{ record.line_user_id if record.line_user_id else '' }}">
+                            <button class="line-send-btn" onclick="sendToLine({{ record.id }})">
+                                <span>LINEで送る</span>
+                            </button>
+                        </div>
+                        <p style="font-size: 11px; color: var(--text-muted); margin: 0;">※Messaging API連携が必要です</p>
+                        <span id="line-status-{{ record.id }}" class="status-msg"></span>
                     </div>
                 </div>
                 {% endfor %}
@@ -189,6 +241,56 @@
                 }
             } catch (err) {
                 alert('削除に失敗しました。');
+            }
+        }
+
+        async function sendToLine(recordId) {
+            const lineField = document.getElementById(`line-id-${recordId}`);
+            const statusMsg = document.getElementById(`line-status-${recordId}`);
+            const sendBtn = lineField.nextElementSibling;
+            
+            const lineUserId = lineField.value.trim();
+            if (!lineUserId) {
+                alert('LINE User IDを入力してください。');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('record_id', recordId);
+            formData.append('line_user_id', lineUserId);
+
+            try {
+                sendBtn.disabled = true;
+                statusMsg.textContent = '⏳ 送信中...';
+                statusMsg.style.display = 'inline';
+                statusMsg.style.color = 'var(--text-muted)';
+
+                const response = await fetch('/api/line/send_report', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusMsg.textContent = '✅ 送信完了';
+                    statusMsg.style.color = 'var(--success)';
+                    if (data.warning) {
+                        alert(data.warning);
+                    }
+                } else {
+                    statusMsg.textContent = '❌ 送信失敗';
+                    statusMsg.style.color = '#ff4757';
+                    alert(data.error);
+                }
+                setTimeout(() => {
+                    statusMsg.style.display = 'none';
+                }, 3000);
+            } catch (err) {
+                statusMsg.textContent = '❌ エラー';
+                statusMsg.style.color = '#ff4757';
+                alert('送信中にエラーが発生しました。');
+            } finally {
+                sendBtn.disabled = false;
             }
         }
     </script>

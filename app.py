@@ -31,6 +31,10 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'seitaimichibiki@g
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '').strip() or None # Renderの環境変数で設定
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', 'seitaimichibiki@gmail.com')
 
+# LINE Messaging API 設定
+app.config['LINE_CHANNEL_ACCESS_TOKEN'] = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
+app.config['LINE_CHANNEL_SECRET'] = os.environ.get('LINE_CHANNEL_SECRET', '')
+
 mail = Mail(app)
 
 # 起動ログ (デバッグ用)
@@ -106,6 +110,13 @@ def init_and_migrate():
                         conn.execute(text('ALTER TABLE analysis_record ADD COLUMN memo TEXT'))
                         conn.commit()
                     print("Database migrated: Added memo column to analysis_record.")
+                
+                # line_user_idカラムチェック
+                if 'line_user_id' not in analysis_columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(text('ALTER TABLE analysis_record ADD COLUMN line_user_id VARCHAR(100)'))
+                        conn.commit()
+                    print("Database migrated: Added line_user_id column to analysis_record.")
         except Exception as e:
             # ログに出力
             app.logger.error(f"Migration error: {e}")
@@ -153,6 +164,9 @@ class AnalysisRecord(db.Model):
     
     # 追記：メモ機能
     memo = db.Column(db.Text, nullable=True)
+    
+    # 追記：LINE連携用
+    line_user_id = db.Column(db.String(100), nullable=True)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -641,6 +655,48 @@ def analyze():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ─── 顧客管理機能 ────────────────────────────────────────────────────────────
+
+@app.route('/api/line/send_report', methods=['POST'])
+@login_required
+def send_line_report():
+    record_id = request.form.get('record_id')
+    line_user_id = request.form.get('line_user_id')
+    
+    if not record_id or not line_user_id:
+        return jsonify({'success': False, 'error': '必要な情報が不足しています。'}), 400
+    
+    record = AnalysisRecord.query.get(record_id)
+    if not record:
+        return jsonify({'success': False, 'error': '指定された記録が見つかりません。'}), 404
+
+    # LINEへのメッセージ送信
+    token = app.config.get('LINE_CHANNEL_ACCESS_TOKEN')
+    if not token:
+        # トークンが設定されていない場合はモック動作（開発用）
+        app.logger.warning("LINE_CHANNEL_ACCESS_TOKEN is not set. Skipping actual send.")
+        record.line_user_id = line_user_id
+        db.session.commit()
+        return jsonify({'success': True, 'warning': 'APIトークンが設定されていないため、送信はスキップされました（IDは保存されました）。'})
+
+    try:
+        from linebot import LineBotApi
+        from linebot.models import TextSendMessage
+        
+        line_bot_api = LineBotApi(token)
+        # レポートURLの構築（本番環境のドメインに合わせて調整が必要な場合あり）
+        report_url = f"{request.host_url}patient/{record.patient_id}"
+        message = f"【整体院 導】姿勢解析レポートが届きました。\n以下のリンクからご確認いただけます：\n{report_url}\n\n※このメッセージには返信できません。"
+        
+        line_bot_api.push_message(line_user_id, TextSendMessage(text=message))
+        
+        # IDを保存
+        record.line_user_id = line_user_id
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.error(f"LINE send error: {e}")
+        return jsonify({'success': False, 'error': f'送信に失敗しました: {str(e)}'}), 500
 
 @app.route('/patients')
 @login_required
