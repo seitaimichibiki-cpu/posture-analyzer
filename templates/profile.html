@@ -222,6 +222,43 @@
                 alertBox.className = 'message error';
             }
         });
+
+        document.getElementById('lineSettingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const accessToken = document.getElementById('line_access_token').value;
+            const channelSecret = document.getElementById('line_channel_secret').value;
+            const alertBox = document.getElementById('lineAlertBox');
+
+            try {
+                const response = await fetch('/api/user/settings/line', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        line_access_token: accessToken,
+                        line_channel_secret: channelSecret
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alertBox.textContent = 'LINE連携設定を保存しました。';
+                    alertBox.className = 'message success';
+                    alertBox.style.display = 'block';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setTimeout(() => { alertBox.style.display = 'none'; }, 5000);
+                } else {
+                    alertBox.textContent = result.error || '保存に失敗しました。';
+                    alertBox.className = 'message error';
+                    alertBox.style.display = 'block';
+                }
+            } catch (error) {
+                alertBox.textContent = '通信エラーが発生しました。';
+                alertBox.className = 'message error';
+                alertBox.style.display = 'block';
+            }
+        });
     </script>
 </body>
 </html>
