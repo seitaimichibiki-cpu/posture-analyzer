@@ -144,11 +144,51 @@
                         <label for="line_channel_secret">チャネルシークレット</label>
                         <input type="text" id="line_channel_secret" name="line_channel_secret" value="{{ user.line_channel_secret if user.line_channel_secret else '' }}" placeholder="1234abcd...">
                     </div>
+
+                    <div class="form-group" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 4px solid #06C755;">
+                        <label style="color: #06C755; font-size: 13px; font-weight: bold; display: block; margin-bottom: 5px;">🔗 LINE Webhook URL</label>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+                            「名前」で送信先を選択できるようにするために、以下のURLをLINE Developersの「Webhook URL」に貼り付けてください。
+                        </p>
+                        <input type="text" readonly value="{{ request.host_url }}callback/{{ user.id }}" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 4px; color: var(--text-bright); padding: 8px; font-size: 11px; font-family: monospace;">
+                    </div>
                     
                     <button type="submit" class="primary-btn" style="width: 100%; margin-top: 10px; background: #06C755;">
                         LINE連携設定を保存
                     </button>
                 </form>
+            </section>
+
+            <section class="card" style="margin-top: 30px;">
+                <h2 style="margin-bottom: 20px; font-size: 18px; color: var(--accent);">👥 LINEユーザー手動登録 (無料版)</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
+                    Lステップの有料Webhookを使わない場合、こちらで患者様の「名前」と「LINE ID」を登録してください。
+                </p>
+
+                <div id="mappingAlertBox" class="message"></div>
+
+                <form id="mappingForm" onsubmit="return false;" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="mapping_name" style="font-size: 11px;">表示名 (例: 佐藤さん)</label>
+                            <input type="text" id="mapping_name" placeholder="佐藤さん" style="padding: 8px;">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="mapping_id" style="font-size: 11px;">LINE User ID (U...)</label>
+                            <input type="text" id="mapping_id" placeholder="U1234..." style="padding: 8px;">
+                        </div>
+                        <button type="submit" class="primary-btn" onclick="addMapping()" style="padding: 8px 15px; background: var(--accent); white-space: nowrap;">
+                            追加
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mapping-list-container">
+                    <h3 style="font-size: 14px; margin-bottom: 10px;">登録済みリスト</h3>
+                    <div id="mappingList" style="max-height: 300px; overflow-y: auto;">
+                        <p style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 20px;">読み込み中...</p>
+                    </div>
+                </div>
             </section>
 
             <section class="card" style="margin-top: 30px;">
@@ -259,6 +299,100 @@
                 alertBox.style.display = 'block';
             }
         });
+
+        // ─── LINE ユーザーマッピング機能 ──────────────────────────────────────────
+
+        async function loadMappings() {
+            const listDiv = document.getElementById('mappingList');
+            try {
+                const response = await fetch('/api/line/mapping/list');
+                const mappings = await response.json();
+                
+                if (mappings.length === 0) {
+                    listDiv.innerHTML = '<p style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 20px;">登録されているユーザーはいません。</p>';
+                    return;
+                }
+
+                listDiv.innerHTML = mappings.map(m => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div>
+                            <div style="font-size: 13px; font-weight: bold; color: var(--text-bright);">${m.display_name}</div>
+                            <div style="font-size: 10px; color: var(--text-muted); font-family: monospace;">${m.line_user_id}</div>
+                        </div>
+                        <button onclick="deleteMapping(${m.id})" style="background: transparent; color: #ff4757; border: 1px solid #ff4757; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">
+                            削除
+                        </button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                listDiv.innerHTML = '<p style="font-size: 12px; color: #ff4757; text-align: center; padding: 20px;">データの取得に失敗しました。</p>';
+            }
+        }
+
+        async function addMapping() {
+            const nameInput = document.getElementById('mapping_name');
+            const idInput = document.getElementById('mapping_id');
+            const alertBox = document.getElementById('mappingAlertBox');
+            
+            const display_name = nameInput.value.trim();
+            const line_user_id = idInput.value.trim();
+
+            if (!display_name || !line_user_id) {
+                alertBox.textContent = '名前とLINE IDを入力してください。';
+                alertBox.className = 'message error';
+                alertBox.style.display = 'block';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('display_name', display_name);
+            formData.append('line_user_id', line_user_id);
+
+            try {
+                const response = await fetch('/api/line/mapping/add', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    nameInput.value = '';
+                    idInput.value = '';
+                    alertBox.textContent = '登録しました。';
+                    alertBox.className = 'message success';
+                    alertBox.style.display = 'block';
+                    loadMappings();
+                    setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
+                } else {
+                    alertBox.textContent = result.error || '登録に失敗しました。';
+                    alertBox.className = 'message error';
+                    alertBox.style.display = 'block';
+                }
+            } catch (err) {
+                alertBox.textContent = '通信エラーが発生しました。';
+                alertBox.className = 'message error';
+                alertBox.style.display = 'block';
+            }
+        }
+
+        async function deleteMapping(id) {
+            if (!confirm('この登録を削除しますか？')) return;
+            
+            try {
+                const response = await fetch(`/api/line/mapping/delete/${id}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    loadMappings();
+                }
+            } catch (err) {
+                alert('削除に失敗しました。');
+            }
+        }
+
+        // 初期読み込み
+        loadMappings();
     </script>
 </body>
 </html>

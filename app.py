@@ -839,6 +839,58 @@ def user_callback(user_id):
         
     return 'OK'
 
+# ─── LINE ユーザーマッピングAPI ──────────────────────────────────────────────────
+
+@app.route('/api/line/mapping/list', methods=['GET'])
+@login_required
+def get_line_mappings():
+    mappings = LineUserMapping.query.filter_by(owner_id=current_user.id).order_by(LineUserMapping.display_name).all()
+    result = []
+    for m in mappings:
+        result.append({
+            'id': m.id,
+            'display_name': m.display_name,
+            'line_user_id': m.line_user_id,
+            'updated_at': m.updated_at.strftime('%Y-%m-%d %H:%M')
+        })
+    return jsonify(result)
+
+@app.route('/api/line/mapping/add', methods=['POST'])
+@login_required
+def add_line_mapping():
+    display_name = request.form.get('display_name')
+    line_user_id = request.form.get('line_user_id')
+    
+    if not display_name or not line_user_id:
+        return jsonify({'success': False, 'error': '名前とLINE IDは必須です。'}), 400
+    
+    # 重複チェック（同一オーナー内）
+    existing = LineUserMapping.query.filter_by(line_user_id=line_user_id, owner_id=current_user.id).first()
+    if existing:
+        existing.display_name = display_name
+        existing.updated_at = db.func.current_timestamp()
+    else:
+        mapping = LineUserMapping(
+            display_name=display_name,
+            line_user_id=line_user_id,
+            owner_id=current_user.id
+        )
+        db.session.add(mapping)
+    
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/line/mapping/delete/<int:mapping_id>', methods=['POST'])
+@login_required
+def delete_line_mapping(mapping_id):
+    mapping = LineUserMapping.query.get_or_404(mapping_id)
+    if mapping.owner_id != current_user.id:
+        return jsonify({'success': False, 'error': '権限がありません。'}), 403
+    
+    db.session.delete(mapping)
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/patients')
 @login_required
 def patients():
