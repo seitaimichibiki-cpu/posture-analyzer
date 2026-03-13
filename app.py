@@ -54,6 +54,7 @@ def server_error(e):
     return render_template('error.html', code=500, title="Server Error"), 500
 
 db = SQLAlchemy(app)
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login' # ログインしていない場合に飛ばす先
 
@@ -218,7 +219,10 @@ def login():
                 user.failed_login_attempts = 0
                 user.locked_until = None
                 db.session.commit()
-                login_user(user)
+                
+                # 自動ログイン設定
+                remember = request.form.get('remember') == 'true'
+                login_user(user, remember=remember)
                 return jsonify({'success': True})
             else:
                 # 失敗時はカウントアップ
