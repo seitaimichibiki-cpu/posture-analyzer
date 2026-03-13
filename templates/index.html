@@ -62,13 +62,6 @@
                     </div>
                     
                     <div class="actions">
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
-                                <label for="patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
-                                <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
-                            </div>
-                            <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;">
-                        </div>
                         <input type="file" id="fileInputCamera" accept="image/*" capture="camera" style="display: none;">
                         <input type="file" id="fileInputLibrary" accept="image/*" style="display: none;">
                         <div class="input-group">
@@ -101,10 +94,10 @@
                 <div class="actions-footer">
                     <div class="form-group" style="margin-bottom: 15px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
-                            <label for="comp_patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
-                            <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('comp_patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
+                            <label for="patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
+                            <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
                         </div>
-                        <input type="text" id="comp_patient_id" placeholder="進捗管理用のIDを入力" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;">
+                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;">
                     </div>
                     <button id="btnAnalyze" class="analyze-btn" disabled onclick="handleExecution()">🚀 解析を実行</button>
                 </div>
@@ -156,10 +149,6 @@
             
             document.getElementById('singleModeArea').style.display = view === 'compare' ? 'none' : 'block';
             document.getElementById('compareModeArea').style.display = view === 'compare' ? 'flex' : 'none';
-            
-            // Show/hide patient ID input based on mode
-            document.getElementById('patient_id').closest('.form-group').style.display = view === 'compare' ? 'none' : 'block';
-            document.getElementById('comp_patient_id').closest('.form-group').style.display = view === 'compare' ? 'block' : 'none';
 
             checkReady();
         }
@@ -278,6 +267,7 @@
                 formData.append('image_before', resizedBlobB, 'before.jpg');
                 formData.append('image_after', resizedBlobA, 'after.jpg');
                 formData.append('view_type', 'auto');
+                formData.append('patient_id', document.getElementById('patient_id').value);
 
                 const response = await fetch('/compare', {
                     method: 'POST',
