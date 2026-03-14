@@ -612,21 +612,44 @@ def calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, fval, rval):
     else: risks.append(("全身", "◎", "全身の垂直バランスは良好です。"))
     return risks
 
-def _calc_risk_row_h(msg): return 38 if len(msg) > MAX_CHARS else 24
-MAX_CHARS = 28
-def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
-def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
+def calc_future_risks(scores):
+    """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
+    # ◎=0, ○=1, △=3, ×=6 (重心値)
+    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
+    total_val = sum(weights.get(s, 0) for s in scores)
+    max_val = len(scores) * 6
+    if max_val == 0: return {}
+    
+    base_risk = (total_val / max_val) * 100
+    
+    # 部位別の重み付け (バイオメカニクス的推論)
+    # 首(FHP)が悪いと自律神経、巻き肩・猫背だと血流・内臓、骨盤だと慢性痛
+    risks = [
+        {"name": "血流・代謝不全", "val": min(base_risk * 1.1 + 10, 99), "desc": "筋ポンプ作用低下による冷え、むくみの定着"},
+        {"name": "自律神経の乱れ", "val": min(base_risk * 0.9 + 5, 99), "desc": "頸椎負荷による不眠・頭痛等の不調リスク"},
+        {"name": "内臓圧迫・消化器", "val": min(base_risk * 0.8 + 5, 99), "desc": "前傾姿勢による腹部圧迫と活動効率低下"},
+        {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"}
+    ]
+    return risks
 
 def build_panel(items, risks, pw, ih):
-    ph = max(_measure_panel_height(items, risks), ih)
+    # スコアリスト作成
+    scores = [it["score"] for it in items] + [r[1] for r in risks]
+    f_risks = calc_future_risks(scores)
+    
+    ph = max(_measure_panel_height(items, risks) + 260, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, "🩺 AI 姿勢解析レポート（正面観察）", fT, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
+    
+    # 既存の計測結果セクション
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
         draw_text(dr, (18,y+8), item["name"], fB, WHITE); bx = pw-50; dr.ellipse([(bx,y+6),(bx+24,y+30)], fill=col); draw_text(dr, (bx+4,y+10), item["score"], fXS, (10,10,10))
         draw_text(dr, (18,y+36), f"理想: {item['normal']:+.1f}°", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']:+.1f}°", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']:.1f}° ({item['direction']})", fS, col); y += 72
+        
+    # 既存のリスク予測
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 22; draw_text(dr, (18,y), "※姿勢データからの推定です", fXXS, GRAY); y += 20
     for pt, sc, msg in risks:
         col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
@@ -635,6 +658,19 @@ def build_panel(items, risks, pw, ih):
         if rem: wrp.append(rem)
         for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
         y += 40
+
+    # 🆕 生活習慣病予測セクション
+    y += 15; dr.rectangle([(10,y),(pw-10,y+250)], fill=(20,24,40), outline=(255, 80, 80)); y += 10; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(18), (255,100,100)); y += 35
+    for fr in f_risks:
+        draw_text(dr, (22,y), fr["name"], fS, WHITE)
+        # ゲージ描画
+        dr.rectangle([(120,y+4),(pw-30,y+14)], fill=(40,40,60))
+        gw = int((pw-150) * (fr["val"]/100))
+        gcol = (255, 60, 60) if fr["val"] > 60 else (255, 180, 40)
+        dr.rectangle([(120,y+4),(120+gw,y+14)], fill=gcol)
+        draw_text(dr, (pw-25,y+2), f"{fr['val']:.0f}%", fXXS, gcol)
+        y += 18; draw_text(dr, (22,y), f"● {fr['desc']}", fXXS, GRAY); y += 32
+
     # 凡例・出典
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ スコア基準", fH, WHITE); y += 22
     leg = [("頭部",[("◎","<1°"),("○","2°"),("△","4°"),("×","4°+")]),("肩",[("◎","<1°"),("○","2°"),("△","3.5°"),("×","3.5°+")]),("骨盤",[("◎","<0.5°"),("○","1.5°"),("△","3°"),("×","3°+")]),("正中線",[("◎","<2%"),("○","4%"),("△","7%"),("×","7%+")])]
@@ -785,7 +821,11 @@ def draw_cog_indicator(img, lm, w, h, x1, y1, scale, view):
         put_text_bold_side(f"COG: {direction}", (p_base[0]-60, py+45), color)
 
 def build_side_panel(items, risks, pw, ih):
-    ph = max(_measure_side_panel_height(items, risks), ih)
+    # スコアリスト作成
+    scores = [it["score"] for it in items] + [r[1] for r in risks]
+    f_risks = calc_future_risks(scores)
+
+    ph = max(_measure_side_panel_height(items, risks) + 260, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, "🩺 AI 姿勢解析レポート（側面観察）", fT, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
@@ -794,14 +834,27 @@ def build_side_panel(items, risks, pw, ih):
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
         draw_text(dr, (18,y+8), item["name"], fB, WHITE); bx = pw-50; dr.ellipse([(bx,y+6),(bx+24,y+30)], fill=col); draw_text(dr, (bx+4,y+10), item["score"], fXS, (10,10,10))
         draw_text(dr, (18,y+36), f"理想: {item['ideal']}", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']}", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']}", fS, col); y += 72
+        
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 22; draw_text(dr, (18,y), "※姿勢データからの推定です", fXXS, GRAY); y += 20
     for pt, sc, msg in risks:
         col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
         rem = msg; wrp = []
         while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
-        if rem: wrp.append(rem)
+        if len(rem) > 0: wrp.append(rem)
         for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
         y += 40
+
+    # 🆕 生活習慣病予測セクション（側面）
+    y += 15; dr.rectangle([(10,y),(pw-10,y+250)], fill=(20,24,40), outline=(255, 80, 80)); y += 10; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(18), (255,100,100)); y += 35
+    for fr in f_risks:
+        draw_text(dr, (22,y), fr["name"], fS, WHITE)
+        dr.rectangle([(120,y+4),(pw-30,y+14)], fill=(40,40,60))
+        gw = int((pw-150) * (fr["val"]/100))
+        gcol = (255, 60, 60) if fr["val"] > 60 else (255, 180, 40)
+        dr.rectangle([(120,y+4),(120+gw,y+14)], fill=gcol)
+        draw_text(dr, (pw-25,y+2), f"{fr['val']:.0f}%", fXXS, gcol)
+        y += 18; draw_text(dr, (22,y), f"● {fr['desc']}", fXXS, GRAY); y += 32
+
     # 凡例・出典
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ スコア基準", fH, WHITE); y += 22
     leg = [("前方頭位",[("◎","<5%"),("○","10%"),("△","18%"),("×",">18%")]),("ラウンド肩",[("◎","<4%"),("○","8%"),("△","14%"),("×",">14%")]),("骨盤前後傾",[("◎","<2°"),("○","5°"),("△","10°"),("×",">10°")]),("体幹ライン",[("◎","<3%"),("○","6%"),("△","12%"),("×",">12%")])]
