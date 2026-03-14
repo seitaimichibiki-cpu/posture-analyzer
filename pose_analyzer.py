@@ -23,9 +23,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 FONT_CANDIDATES = [
     "/System/Library/Fonts/Hiragino Sans GB.ttc",
-    "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-    "/System/Library/Fonts/SFArabic.ttf",
     os.path.join(SCRIPT_DIR, "NotoSansJP.ttf"),
+    "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+    "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+    "/System/Library/Fonts/AppleSDGothicNeo.ttc",
 ]
 
 def get_font(size):
@@ -647,6 +648,27 @@ def calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, fval, rval):
     else: risks.append(("腰・骨盤", "◎", "骨盤バランスは良好です。"))
     if trk_sc == "×": risks.append(("全身", "×", "重心ラインが大きくずれ、全身が疲れやすい姿勢です。"))
     else: risks.append(("全身", "◎", "全身の垂直バランスは良好です。"))
+    return risks
+
+def _calc_risk_row_h(msg): return 38 if len(msg) > MAX_CHARS else 24
+MAX_CHARS = 28
+def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
+def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
+
+def calc_future_risks(scores):
+    """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
+    # ◎=0, ○=1, △=3, ×=6 (重心値)
+    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
+    total_val = sum(weights.get(s, 0) for s in scores)
+    max_val = len(scores) * 6
+    if max_val == 0: return {}
+    
+    base_risk = (total_val / max_val) * 100
+    
+    # 部位別の重み付け (バイオメカニクス的推論)
+    # 首(FHP)が悪いと自律神経、巻き肩・猫背だと血流・内臓、骨盤だと慢性痛
+    risks = [
+        {"name": "血流・代謝不全", "val": min(base_risk * 1.1 + 10, 99), "desc": "筋ポンプ作用低下による冷え、むくみの定着"},
         {"name": "自律神経の乱れ", "val": min(base_risk * 0.9 + 5, 99), "desc": "頸椎負荷による不眠・頭痛等の不調リスク"},
         {"name": "内臓圧迫・消化器", "val": min(base_risk * 0.8 + 5, 99), "desc": "前傾姿勢による腹部圧迫と活動効率低下"},
         {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"}
@@ -657,21 +679,11 @@ def build_panel(items, risks, pw, ih):
     # スコアリスト作成
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
-    total_pt = _calc_total_score(scores)
     
-    ph = max(_measure_panel_height(items, risks) + 580, ih)
+    ph = max(_measure_panel_height(items, risks) + 500, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
-    
-    # ─── 総合スコア表示 ─────
-    y = 65
-    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
-    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
-    score_col = YELLOW if total_pt > 70 else (255,100,100)
-    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col)
-    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
-    
-    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
+    y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
     
     # 既存の計測結果セクション
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
@@ -871,21 +883,11 @@ def build_side_panel(items, risks, pw, ih):
     # スコアリスト作成
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
-    total_pt = _calc_total_score(scores)
 
-    ph = max(_measure_side_panel_height(items, risks) + 580, ih)
+    ph = max(_measure_side_panel_height(items, risks) + 500, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
-    
-    # ─── 総合スコア表示 ─────
-    y = 65
-    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
-    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
-    score_col = YELLOW if total_pt > 70 else (255,100,100)
-    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col)
-    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
-    
-    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
+    y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
