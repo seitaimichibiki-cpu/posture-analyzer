@@ -679,11 +679,21 @@ def build_panel(items, risks, pw, ih):
     # スコアリスト作成
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
+    total_pt = _calc_total_score(scores)
     
-    ph = max(_measure_panel_height(items, risks) + 500, ih)
+    ph = max(_measure_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
-    y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
+    
+    # ─── 総合スコア表示 ─────
+    y = 65
+    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
+    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
+    score_col = YELLOW if total_pt > 70 else (255,100,100)
+    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col)
+    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
+    
+    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
     
     # 既存の計測結果セクション
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
@@ -883,11 +893,21 @@ def build_side_panel(items, risks, pw, ih):
     # スコアリスト作成
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
+    total_pt = _calc_total_score(scores)
 
-    ph = max(_measure_side_panel_height(items, risks) + 500, ih)
+    ph = max(_measure_side_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
-    y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
+    
+    # ─── 総合スコア表示 ─────
+    y = 65
+    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
+    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
+    score_col = YELLOW if total_pt > 70 else (255,100,100)
+    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col)
+    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
+
+    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
