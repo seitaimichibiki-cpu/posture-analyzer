@@ -12,6 +12,7 @@ import mediapipe as mp
 import math
 import numpy as np
 import os
+import gc
 import glob
 from PIL import Image, ImageDraw, ImageFont
 from mediapipe.tasks import python as mp_python
@@ -126,7 +127,6 @@ class PoseAnalyzer:
 
     def analyze_comparison(self, img_path1, img_path2, output_path, muscle_output_path, view_type='auto'):
         """2枚の画像を比較解析する"""
-        import gc
         img1_orig, img2_orig = cv2.imread(img_path1), cv2.imread(img_path2)
         if img1_orig is None or img2_orig is None: return {'success': False, 'error': 'Image load failed'}
 
