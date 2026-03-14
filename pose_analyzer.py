@@ -552,13 +552,20 @@ def _get_side_score(key, val):
     if val < t[2]: return "△"
     return "×"
 
-def _calc_total_score(scores):
-    """一律の減点方式による総合点算出"""
+def _calc_total_score(item_scores, risk_scores):
+    """主要項目とリスク項目で重みを変えた総合点算出（甘口設定）"""
     deduction = 0
-    mapping = {"◎": 0, "○": 2, "△": 8, "×": 15}
-    for s in scores:
-        deduction += mapping.get(s, 5)
-    return max(0, 100 - deduction)
+    # 主要項目（計測結果）: やや厳しめだがマイルドに
+    i_map = {"◎": 0, "○": 1.5, "△": 6, "×": 12}
+    # リスク項目（推定）: よりマイルドに
+    r_map = {"◎": 0, "○": 0.5, "△": 2, "×": 5}
+    
+    for s in item_scores:
+        deduction += i_map.get(s, 1)
+    for s in risk_scores:
+        deduction += r_map.get(s, 0.5)
+        
+    return int(max(0, 100 - deduction))
 
 def direction(a): return "右下がり" if a >= 0 else "左下がり"
 def pxcoord(lm, w, h): return (int(lm.x*w), int(lm.y*h))
@@ -677,9 +684,10 @@ def calc_future_risks(scores):
 
 def build_panel(items, risks, pw, ih):
     # スコアリスト作成
-    scores = [it["score"] for it in items] + [r[1] for r in risks]
-    f_risks = calc_future_risks(scores)
-    total_pt = _calc_total_score(scores)
+    i_scores = [it["score"] for it in items]
+    r_scores = [r[1] for r in risks]
+    f_risks = calc_future_risks(i_scores + r_scores)
+    total_pt = _calc_total_score(i_scores, r_scores)
     
     ph = max(_measure_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
@@ -892,9 +900,10 @@ def draw_cog_indicator(img, lm, w, h, x1, y1, scale, view):
 
 def build_side_panel(items, risks, pw, ih):
     # スコアリスト作成
-    scores = [it["score"] for it in items] + [r[1] for r in risks]
-    f_risks = calc_future_risks(scores)
-    total_pt = _calc_total_score(scores)
+    i_scores = [it["score"] for it in items]
+    r_scores = [r[1] for r in risks]
+    f_risks = calc_future_risks(i_scores + r_scores)
+    total_pt = _calc_total_score(i_scores, r_scores)
 
     ph = max(_measure_side_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
