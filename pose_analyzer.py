@@ -157,12 +157,6 @@ class PoseAnalyzer:
             panel = build_comparison_panel(items1, items2, risks2, 560, 1400, "側面")
 
         # レポート合成 [Before][After][Panel]
-        # 個別画像の保存パス（スライダー用）
-        before_out = output_path.replace(".jpg", "_before.jpg")
-        after_out = output_path.replace(".jpg", "_after.jpg")
-        cv2.imwrite(before_out, res_img1)
-        cv2.imwrite(after_out, res_img2)
-
         success = self._save_comparison_report(res_img1, res_img2, panel, output_path, f"比較（{view}）")
 
         # 数値データを辞書で返す
@@ -282,9 +276,13 @@ class PoseAnalyzer:
         # 3. 描画（リサイズ済みの最終画像に対して実施）
         draw_skeleton_zoom(img_final, lm, w, h, x1, y1, scale)
         draw_meas_line_zoom(img_final, lm[7],  lm[8],  sc_head,   w, h, x1, y1, scale)
-        draw_meas_line_zoom(img_final, lm[11], lm[12], sc_shldr,  w, h, x1, y1, scale)
         draw_meas_line_zoom(img_final, lm[23], lm[24], sc_pelvis, w, h, x1, y1, scale)
         draw_midline_zoom(img_final, lm, w, h, x1, y1, scale)
+
+        # 筋肉緊張・重心 (Phase 23/24)
+        tensions = estimate_muscle_tension(lm, 'front')
+        draw_muscle_heatmap(img_final, lm, tensions, w, h, x1, y1, scale)
+        draw_cog_indicator(img_final, lm, w, h, x1, y1, scale, 'front')
 
         # 4. ラベル描画（はみ出し防止付き）
         pil_photo = cv2pil(img_final); dp = ImageDraw.Draw(pil_photo); fl = get_font(20); fl_s = get_font(16)
@@ -378,15 +376,19 @@ class PoseAnalyzer:
             cv2.line(img_final, (ankle_px[0], yy), (ankle_px[0], min(yy+12, ankle_px[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
         
         pts = [ear_px, shldr_px, hip_px, ankle_px]
-        for i in range(len(pts)-1): cv2.line(img_final, pts[i], pts[i+1], (200, 200, 50), 3, cv2.LINE_AA)
-        for pt in pts: cv2.circle(img_final, pt, 7, (200, 200, 50), -1, cv2.LINE_AA)
+        for i in range(len(pts)-1): cv2.line(img_final, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
+        for pt in pts: cv2.circle(img_final, pt, 7, (200,200,50), -1)
+
+        # 筋肉緊張・重心 (Phase 23/24)
+        tensions = estimate_muscle_tension(lm, 'side')
+        draw_muscle_heatmap(img_final, lm, tensions, w, h, x1, y1, scale)
+        draw_cog_indicator(img_final, lm, w, h, x1, y1, scale, 'side')
 
         # 水平偏差矢印
         def draw_h_diff_zoom(p_a, p_b, sc):
             col = SCORE_BGR[sc]; my = (p_a[1]+p_b[1])//2
             cv2.arrowedLine(img_final, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.2)
-            cv2.circle(img_final, p_a, 7, col, -1, cv2.LINE_AA)
-            cv2.circle(img_final, p_b, 7, col, -1, cv2.LINE_AA)
+            cv2.circle(img_final, p_a, 7, col, -1); cv2.circle(img_final, p_b, 7, col, -1)
         draw_h_diff_zoom(ear_px, shldr_px, fhp_sc)
 
         # 4. ラベル描画（はみ出し防止）
@@ -505,18 +507,17 @@ def draw_skeleton_zoom(img, lm, w, h, x1, y1, scale):
         if lm[s].visibility > 0.3 and lm[e].visibility > 0.3:
             p1 = px_zoom(lm[s], w, h, x1, y1, scale)
             p2 = px_zoom(lm[e], w, h, x1, y1, scale)
-            cv2.line(img, p1, p2, (150, 150, 150), 1, cv2.LINE_AA)
+            cv2.line(img, p1, p2, (150,150,150), 1, cv2.LINE_AA)
     for l in lm:
-        if l.visibility > 0.3:
-            cv2.circle(img, px_zoom(l, w, h, x1, y1, scale), 3, (80, 230, 120), -1, cv2.LINE_AA)
+        cv2.circle(img, px_zoom(l, w, h, x1, y1, scale), 3, (80,230,120), -1)
 
 def draw_meas_line_zoom(img, lm1, lm2, sc, w, h, x1, y1, scale):
     c = SCORE_BGR[sc]
     p1 = px_zoom(lm1, w, h, x1, y1, scale)
     p2 = px_zoom(lm2, w, h, x1, y1, scale)
-    cv2.line(img, p1, p2, c, 3, cv2.LINE_AA)
-    cv2.circle(img, p1, 6, c, -1, cv2.LINE_AA)
-    cv2.circle(img, p2, 6, c, -1, cv2.LINE_AA)
+    # 線を細く（2px）に変更して精密感を出す
+    cv2.line(img, p1, p2, c, 2, cv2.LINE_AA)
+    cv2.circle(img, p1, 6, c, -1); cv2.circle(img, p2, 6, c, -1)
 
 def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
     lx_orig = (lm[27].x + lm[28].x) / 2 * w
@@ -609,6 +610,104 @@ def build_panel(items, risks, pw, ih):
     y += 10; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), "▌ 評価基準の出典", get_font(13), WHITE); y += 18
     for r in ["・ Kendall et al. (2005)", "・ Magee DJ. (2014)", "・ 日本リハ会 姿勢評価GL"]: draw_text(dr, (18,y), r, fXXS, GRAY); y += 15
     return pil2cv2(np.array(p))
+
+# ─── 高度な解析演出 (重心・筋肉) ───────────────────────────────────────────
+def estimate_muscle_tension(landmarks, view):
+    """姿勢ランドマークから筋肉の緊張度(0.0-1.0)を部位別に推定"""
+    tensions = {}
+    lm = landmarks
+    if view == 'front':
+        # 正面視：左右差に基づく推定
+        shldr_a = abs(calc_angle(lm[11], lm[12], 100, 100))
+        pelvis_a = abs(calc_angle(lm[23], lm[24], 100, 100))
+        tensions['trapezius_l'] = min(shldr_a / 5.0, 1.0) if lm[11].y > lm[12].y else 0.1
+        tensions['trapezius_r'] = min(shldr_a / 5.0, 1.0) if lm[12].y > lm[11].y else 0.1
+        tensions['erector_spinae_l'] = min(pelvis_a / 4.0, 1.0) if lm[23].y > lm[24].y else 0.2
+        tensions['erector_spinae_r'] = min(pelvis_a / 4.0, 1.0) if lm[24].y > lm[23].y else 0.2
+    else:
+        # 側面視：前後ズレに基づく推定
+        # 首の筋肉 (Splenius/SCM)
+        fhp = abs(lm[0].x - lm[11].x) # 簡易的なFHP
+        tensions['neck_extensor'] = min(fhp * 5.0, 1.0)
+        # 腰 (Lumbar)
+        tensions['lumbar_extensor'] = min(abs(lm[11].x - lm[23].x) * 3.0, 0.8)
+        # 前もも/裏もも
+        tensions['quads'] = min(abs(lm[23].x - lm[25].x) * 4.0, 0.7)
+    return tensions
+
+def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
+    """筋肉の緊張箇所を半透明のヒートマップでオーバーレイ"""
+    overlay = img.copy()
+    lm = landmarks
+    font = get_font(12)
+    
+    def draw_tension_blob(point_lm, tension, color=(0, 0, 255), label=""):
+        if tension < 0.3: return
+        p = px_zoom(point_lm, w, h, x1, y1, scale)
+        radius = int(30 * tension * scale)
+        alpha = int(150 * tension)
+        # ぼかしの効いた円を描画
+        cv2.circle(overlay, p, radius, color, -1)
+        if label:
+            cv2.putText(img, label, (p[0]+15, p[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
+
+    # 部位別の緊張度を可視化
+    for part, t in tensions.items():
+        if part.startswith('trapezius'):
+            idx = 11 if '_l' in part else 12
+            draw_tension_blob(lm[idx], t, (0, 100, 255), "Trapezius")
+        elif part == 'neck_extensor':
+            # 首の付け根付近
+            class MidPoint:
+                def __init__(self, x, y):
+                    self.x = x
+                    self.y = y
+                    self.visibility = 1.0
+            mn = MidPoint((lm[7].x+lm[8].x)/2, (lm[7].y+lm[11].y)/2)
+            draw_tension_blob(mn, t, (0, 120, 255), "Neck Stress")
+        elif part == 'erector_spinae':
+            idx = 23 if '_l' in part else 24
+            draw_tension_blob(lm[idx], t, (0, 80, 220), "Back Stress")
+
+    cv2.addWeighted(overlay, 0.4, img, 0.6, 0, img)
+
+def draw_cog_indicator(img, lm, w, h, x1, y1, scale, view):
+    """支持基底面に対する重心(COG)位置と左右荷重バランスを表示"""
+    # 両足の中点を計算
+    ankle_l, ankle_r = lm[27], lm[28]
+    base_mid_x = (ankle_l.x + ankle_r.x) / 2
+    
+    # 上半身の簡易重心（鼻、肩、腰の中点）
+    upper_body_x = (lm[0].x + lm[11].x + lm[12].x + lm[23].x + lm[24].x) / 5
+    
+    # ズレを計算 (-1.0 to 1.0)
+    width = max(abs(ankle_l.x - ankle_r.x), 0.05)
+    shift = (upper_body_x - base_mid_x) / width
+    
+    # 足元座標
+    p_base = midpoint(px_zoom(ankle_l, w, h, x1, y1, scale), px_zoom(ankle_r, w, h, x1, y1, scale))
+    py = p_base[1] + 40
+    
+    if view == 'front':
+        # 荷重バランスインジケータ（正面）
+        bar_w = 120
+        cv2.rectangle(img, (p_base[0]-bar_w//2, py), (p_base[0]+bar_w//2, py+8), (60,60,60), -1)
+        # 現在の重心点
+        cog_x = int(p_base[0] + (shift * bar_w / 2))
+        cog_x = max(p_base[0]-bar_w//2, min(p_base[0]+bar_w//2, cog_x))
+        cv2.circle(img, (cog_x, py+4), 6, (0, 255, 255), -1)
+        
+        # パーセント表示
+        left_p = 50 - (shift * 50)
+        right_p = 100 - left_p
+        cv2.putText(img, f"L:{left_p:.0f}%", (p_base[0]-bar_w//2-50, py+10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200,200,200), 1)
+        cv2.putText(img, f"R:{right_p:.0f}%", (p_base[0]+bar_w//2+10, py+10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200,200,200), 1)
+        cv2.putText(img, "LOAD BALANCE", (p_base[0]-40, py+24), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (150,150,150), 1)
+    else:
+        # 重心フラグ（側面）
+        direction = "FORWARD" if shift > 0.1 else "BACKWARD" if shift < -0.1 else "IDEAL"
+        color = (0, 255, 255) if direction != "IDEAL" else (80, 220, 140)
+        cv2.putText(img, f"COG: {direction}", (p_base[0]-40, py+10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
 def build_side_panel(items, risks, pw, ih):
     ph = max(_measure_side_panel_height(items, risks), ih)
