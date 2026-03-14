@@ -671,7 +671,7 @@ def build_panel(items, risks, pw, ih):
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
     
-    ph = max(_measure_panel_height(items, risks) + 380, ih)
+    ph = max(_measure_panel_height(items, risks) + 500, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
@@ -684,7 +684,7 @@ def build_panel(items, risks, pw, ih):
         draw_text(dr, (18,y+36), f"理想: {item['normal']:+.1f}°", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']:+.1f}°", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']:.1f}° ({item['direction']})", fS, col); y += 72
         
     # 既存のリスク予測
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 22; draw_text(dr, (18,y), "※姿勢データからの推定です", fXXS, GRAY); y += 20
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 22
     for pt, sc, msg in risks:
         col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
         rem = msg; wrp = []
@@ -694,7 +694,7 @@ def build_panel(items, risks, pw, ih):
         y += 40
 
     # 🆕 生活習慣病予測セクション（改善されたレイアウト）
-    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "■ 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
+    y += 18; dr.rectangle([(10,y),(pw-10,y+450)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
     for fr in f_risks:
         # 項目の名称を一行目に配置
         draw_text(dr, (25,y), fr["name"], fB, WHITE)
@@ -868,7 +868,7 @@ def build_side_panel(items, risks, pw, ih):
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
 
-    ph = max(_measure_side_panel_height(items, risks) + 380, ih)
+    ph = max(_measure_side_panel_height(items, risks) + 500, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
@@ -878,7 +878,7 @@ def build_side_panel(items, risks, pw, ih):
         draw_text(dr, (18,y+8), item["name"], fB, WHITE); bx = pw-50; dr.ellipse([(bx,y+6),(bx+24,y+30)], fill=col); draw_text(dr, (bx+4,y+10), item["score"], fXS, (10,10,10))
         draw_text(dr, (18,y+36), f"理想: {item['ideal']}", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']}", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']}", fS, col); y += 72
         
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 22; draw_text(dr, (18,y), "※姿勢データからの推定です", fXXS, GRAY); y += 20
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 22
     for pt, sc, msg in risks:
         col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
         rem = msg; wrp = []
@@ -888,7 +888,7 @@ def build_side_panel(items, risks, pw, ih):
         y += 40
 
     # 🆕 生活習慣病予測セクション（側面：改善されたレイアウト）
-    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "■ 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
+    y += 18; dr.rectangle([(10,y),(pw-10,y+450)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
     for fr in f_risks:
         # 項目の名称を一行目に配置
         draw_text(dr, (25,y), fr["name"], fB, WHITE)
