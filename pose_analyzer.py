@@ -729,11 +729,12 @@ def build_panel(items, risks, pw, ih):
         # ゲージ描画（二行目：左寄せ）
         bar_x1, bar_x2 = 25, pw - 85
         dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
-        gw = int((bar_x2 - bar_x1) * (fr["val"] / 100))
-        gcol = (255, 60, 60) if fr["val"] > 60 else (255, 180, 40)
+        v_f = float(fr.get("val", 0))
+        gw = int((bar_x2 - bar_x1) * (v_f / 100))
+        gcol = (255, 60, 60) if v_f > 60 else (255, 180, 40)
         dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol)
         # パーセンテージ描画（ゲージの右隣）
-        draw_text(dr, (bar_x2 + 10, y - 4), f"{fr['val']:.0f}%", fS, gcol)
+        draw_text(dr, (bar_x2 + 10, y - 4), f"{v_f:.0f}%", fS, gcol)
         y += 22
         
         # 三行目：説明文
@@ -940,11 +941,12 @@ def build_side_panel(items, risks, pw, ih):
         # ゲージ描画（二行目：左寄せ）
         bar_x1, bar_x2 = 25, pw - 85
         dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
-        gw = int((bar_x2 - bar_x1) * (fr["val"] / 100))
-        gcol = (255, 60, 60) if fr["val"] > 60 else (255, 180, 40)
+        v_f = float(fr.get("val", 0))
+        gw = int((bar_x2 - bar_x1) * (v_f / 100))
+        gcol = (255, 60, 60) if v_f > 60 else (255, 180, 40)
         dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol)
         # パーセンテージ描画（ゲージの右隣）
-        draw_text(dr, (bar_x2 + 10, y - 4), f"{fr['val']:.0f}%", fS, gcol)
+        draw_text(dr, (bar_x2 + 10, y - 4), f"{v_f:.0f}%", fS, gcol)
         y += 22
         
         # 三行目：説明文
