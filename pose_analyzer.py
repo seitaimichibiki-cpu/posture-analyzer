@@ -782,8 +782,7 @@ def calc_future_risks(scores):
         {"name": "自律神経の乱れ", "val": min(base_risk * 0.9 + 5, 99), "desc": "頸椎負荷による不眠・頭痛等の不調リスク"},
         {"name": "内臓圧迫・消化器", "val": min(base_risk * 0.8 + 5, 99), "desc": "前傾姿勢による腹部圧迫と活動効率低下"},
         {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"},
-        {"name": "脊椎のエージング", "val": min(base_risk * 1.0 + 12, 99), "desc": "持続的な負荷による骨棘発生・椎間板変性"},
-        {"name": "脳疲労・集中力", "val": min(base_risk * 0.85 + 8, 99), "desc": "脳血流ストレスによる集中力低下と慢性疲労"}
+        {"name": "脊椎の変性", "val": min(base_risk * 1.0 + 12, 99), "desc": "持続的な負荷による骨棘発生・椎間板変性"}
     ]
     return risks
 
