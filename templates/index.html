@@ -115,10 +115,10 @@
                 <div class="actions" style="margin-top: 24px;">
                     <div class="form-group" style="margin-bottom: 15px; position: relative;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
-                            <label for="patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
+                            <label for="patient_id" style="font-size: 13px; color: var(--accent); font-weight: bold;">顧客ID・お名前（必須）</label>
                             <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
                         </div>
-                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off">
+                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid var(--accent); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off" oninput="checkReady()">
                         <!-- オートコンプリートの結果表示用 -->
                         <div id="patient-search-results" class="line-search-results" style="display: none;"></div>
                     </div>
@@ -210,11 +210,17 @@
 
         function checkReady() {
             const btn = document.getElementById('btnAnalyze');
+            const patientId = document.getElementById('patient_id').value.trim();
+            
+            let photoReady = false;
             if (viewMode === 'compare') {
-                btn.disabled = !(fileB && fileA);
+                photoReady = !!(fileB && fileA);
             } else {
-                btn.disabled = !fileSingle;
+                photoReady = !!fileSingle;
             }
+            
+            // 写真と顧客IDの両方が揃っている場合のみボタンを有効化
+            btn.disabled = !(photoReady && patientId);
         }
 
         async function analyze() {
