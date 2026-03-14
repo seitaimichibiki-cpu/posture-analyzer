@@ -1132,6 +1132,12 @@ def compare():
 
             db.session.commit()
 
+            # フォールバック: Cloudinaryが使えない場合はローカルURLを返す
+            if not before_cloud_url:
+                before_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path).replace(".jpg", "_before.jpg")}')
+            if not after_cloud_url:
+                after_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path).replace(".jpg", "_after.jpg")}')
+
             return jsonify({
                 'success': True,
                 'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg'),

@@ -258,11 +258,16 @@
                 document.getElementById('downloadBtn').href = '/download/' + filename;
                 
                 // 比較スライダーの処理 (Phase 20)
+                console.log('viewMode:', viewMode);
+                console.log('before_url:', data.before_url);
+                console.log('after_url:', data.after_url);
+
                 if (viewMode === 'compare' && data.before_url && data.after_url) {
                     showComparisonSlider(data.before_url, data.after_url);
                 } else {
                     document.getElementById('comparisonSliderArea')?.remove();
-                    document.querySelector('.report-wrapper').style.display = 'block';
+                    const wrapper = document.querySelector('.report-wrapper');
+                    if (wrapper) wrapper.style.display = 'block';
                 }
 
                 if (data.advice) {
@@ -295,8 +300,13 @@
             `;
             
             const wrapper = document.querySelector('.report-wrapper');
-            wrapper.style.display = 'none'; // 統合レポート画像は隠す
-            wrapper.parentNode.insertBefore(area, wrapper);
+            if (wrapper && wrapper.parentNode) {
+                console.log('Inserting comparison slider before wrapper');
+                wrapper.style.display = 'none'; // 統合レポート画像は隠す
+                wrapper.parentNode.insertBefore(area, wrapper);
+            } else {
+                console.error('Could not find .report-wrapper or its parent node');
+            }
 
             const input = document.getElementById('sliderInput');
             const beforeImg = document.getElementById('sliderBeforeImg');
