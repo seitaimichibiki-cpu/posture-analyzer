@@ -249,15 +249,28 @@ class PoseAnalyzer:
         return p_img, m_img, items, risks
 
     def _save_comparison_report(self, img1, img2, panel, output_path, title):
-        # [Before][After][Panel]
-        # img1, img2 の横幅を揃える（アスペクト比維持のため最大幅に合わせる必要はないが、レイアウトとして整える）
-        canvas = np.hstack([img1, img2, panel])
+        # [Before][After][Panel] の高さを揃える
+        h1, h2, hp = img1.shape[0], img2.shape[0], panel.shape[0]
+        max_h = max(h1, h2, hp)
+        
+        def pad_img(im, target_h, bg_col):
+            ch, cw = im.shape[:2]
+            if ch == target_h: return im
+            res = np.full((target_h, cw, 3), bg_col, dtype=np.uint8)
+            res[:ch, :] = im
+            return res
+
+        img1_p = pad_img(img1, max_h, (30, 35, 60))
+        img2_p = pad_img(img2, max_h, (30, 35, 60))
+        panel_p = pad_img(panel, max_h, PANEL_BG)
+        
+        canvas = np.hstack([img1_p, img2_p, panel_p])
         bar_h = 60; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58)); draw = ImageDraw.Draw(full_p)
         draw_text_center(draw, fw//2, 10, f"整体院 導 ｜ AI 姿勢比較レポート（{title}）", get_font(34), WHITE)
         
         # Before/After のラベル
-        w1 = img1.shape[1]; w2 = img2.shape[1]
+        w1, w2 = img1.shape[1], img2.shape[1]
         draw.rectangle([(0, bar_h), (w1, bar_h+40)], fill=(40,50,90))
         draw_text_center(draw, w1//2, bar_h+8, "【 BEFORE 】", get_font(24), YELLOW)
         draw.rectangle([(w1, bar_h), (w1+w2, bar_h+40)], fill=(50,70,120))
@@ -475,7 +488,22 @@ class PoseAnalyzer:
 
     def _save_final_report(self, img, panel, output_path, title_suffix):
         # 描画済みのimgとpanelを連結して保存
-        canvas = np.hstack([img, panel])
+        h1, w1 = img.shape[:2]
+        h2, w2 = panel.shape[:2]
+        max_h = max(h1, h2)
+        
+        # 高さを揃える（背景色 PANEL_BG でパディング）
+        def pad_img(im, target_h, bg_col):
+            curr_h, curr_w = im.shape[:2]
+            if curr_h == target_h: return im
+            res = np.full((target_h, curr_w, 3), bg_col, dtype=np.uint8)
+            res[:curr_h, :] = im
+            return res
+            
+        img_pad = pad_img(img, max_h, (30, 35, 60))
+        panel_pad = pad_img(panel, max_h, (24, 29, 48))
+        
+        canvas = np.hstack([img_pad, panel_pad])
         bar_h = 52; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58))
         full_d = ImageDraw.Draw(full_p)
