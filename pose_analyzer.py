@@ -725,7 +725,7 @@ def draw_cog_indicator(img, lm, w, h, x1, y1, scale, view):
             cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (10, 10, 10), thickness + 2, cv2.LINE_AA)
             cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
             
-        put_text_bold_side(f"COG: {direction}", (p_base[0]-60, py+15), color)
+        put_text_bold_side(f"COG: {direction}", (p_base[0]-60, py+45), color)
 
 def build_side_panel(items, risks, pw, ih):
     ph = max(_measure_side_panel_height(items, risks), ih)
