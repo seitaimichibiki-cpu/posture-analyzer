@@ -194,6 +194,7 @@ class PoseAnalyzer:
         # 姿勢図
         p_img = img_f.copy()
         draw_skeleton_zoom(p_img, lm, w, h, x1, y1, scale)
+        draw_meas_line_zoom(p_img, lm[7],  lm[8],  sc_h, w, h, x1, y1, scale)
         draw_meas_line_zoom(p_img, lm[11], lm[12], sc_s, w, h, x1, y1, scale)
         draw_meas_line_zoom(p_img, lm[23], lm[24], sc_p, w, h, x1, y1, scale)
         draw_midline_zoom(p_img, lm, w, h, x1, y1, scale)
