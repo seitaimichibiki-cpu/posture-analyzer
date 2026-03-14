@@ -430,6 +430,19 @@ def api_search_patients():
         .limit(10).all()
     
     return jsonify([r.patient_id for r in results])
+@app.route('/api/recent_patients')
+@login_required
+def api_recent_patients():
+    """最近解析した患者リスト（ユニーク）を20件取得"""
+    results = db.session.query(
+        AnalysisRecord.patient_id,
+        db.func.max(AnalysisRecord.created_at).label('last_date')
+    ).filter(AnalysisRecord.user_id == current_user.id)\
+     .group_by(AnalysisRecord.patient_id)\
+     .order_by(db.text('last_date DESC'))\
+     .limit(20).all()
+    
+    return jsonify([{'id': r.patient_id} for r in results])
 
 @app.route('/api/patient_stats')
 @login_required

@@ -3,15 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>進捗統計 ｜ 整体院 導</title>
+    <title>ダッシュボード ｜ 整体院 導</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .stats-container {
-            max-width: 800px;
-            margin: 0 auto;
+        body {
+            overflow: hidden; /* サイドバー固定のため */
+        }
+        .dashboard-layout {
+            display: flex;
+            height: calc(100vh - 80px); /* ヘッダー分を引く */
+            gap: 20px;
+            margin-top: 20px;
+        }
+        /* サイドバー */
+        .sidebar {
+            width: 280px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-header h2 {
+            font-size: 14px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: white;
+            font-size: 13px;
+        }
+        .patient-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .patient-item {
+            padding: 12px 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-muted);
+        }
+        .patient-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: white;
+        }
+        .patient-item.active {
+            background: var(--accent-gradient);
+            color: #080a12;
+            font-weight: bold;
+        }
+        .patient-item .icon { font-size: 18px; }
+
+        /* メインエリア */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
         }
         .chart-card {
             background: var(--card-bg);
@@ -19,20 +87,6 @@
             padding: 24px;
             margin-bottom: 24px;
             border: 1px solid var(--border);
-        }
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-        }
-        .search-box input {
-            flex: 1;
-            padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            color: white;
-            font-size: 16px;
         }
         .tabs {
             display: flex;
@@ -55,68 +109,138 @@
         }
         .no-data {
             text-align: center;
-            padding: 50px;
+            padding: 80px 20px;
             color: var(--text-muted);
             background: rgba(0,0,0,0.2);
             border-radius: 20px;
         }
+
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
 <body>
-    <div class="container stats-container">
-        <header>
-            <div class="logo">整体院 導</div>
-            <h1>改善進捗グラフ</h1>
-            <p class="subtitle">数値データの推移を確認</p>
-            <div style="margin-top: 15px;">
-                <a href="{{ url_for('index') }}" style="color: var(--text-muted); text-decoration: none; font-size: 14px;">← 解析画面に戻る</a>
+    <div class="container" style="max-width: 1200px;">
+        <header style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="logo">整体院 導</div>
+                <h1>患者履歴ダッシュボード</h1>
             </div>
+            <a href="{{ url_for('index') }}" class="secondary-btn" style="text-decoration: none; padding: 10px 20px;">← 解析画面</a>
         </header>
 
-        <main>
-            <div class="search-box">
-                <input type="text" id="patientIdInput" placeholder="顧客IDを入力（例: 101）" value="{{ patient_id }}">
-                <button onclick="loadStats()" class="primary-btn" style="padding: 10px 24px;">検索</button>
-            </div>
-
-            <div id="statsContent" style="display: none;">
-                <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTheme('front')">正面解析の推移</button>
-                    <button class="tab-btn" onclick="switchTheme('side')">側面解析の推移</button>
+        <div class="dashboard-layout">
+            <!-- 左サイドバー: 患者リスト -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2><span>👥</span> 最近の患者</h2>
+                    <input type="text" id="searchInput" class="search-input" placeholder="名前・IDで検索..." oninput="filterPatients()">
                 </div>
+                <div id="patientList" class="patient-list">
+                    <div style="text-align:center; padding:20px; color:var(--text-muted);">読込中...</div>
+                </div>
+            </aside>
 
-                <div id="frontCharts">
-                    <div class="chart-card">
-                        <h3 style="margin-bottom: 15px; font-size: 16px;">肩・骨盤の傾き角度 (°)</h3>
-                        <canvas id="angleChart"></canvas>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">※ 0に近づくほど平行で良好な状態です。</p>
+            <!-- 右メイン: グラフ表示 -->
+            <main class="main-content">
+                <div id="statsContent" style="display: none;">
+                    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                        <h2 id="currentPatientName" style="font-size: 20px; color: white;">選択中の患者</h2>
+                        <div class="tabs" style="margin-bottom: 0;">
+                            <button class="tab-btn active" id="btnFront" onclick="switchTheme('front')">正面解析</button>
+                            <button class="tab-btn" id="btnSide" onclick="switchTheme('side')">側面解析</button>
+                        </div>
+                    </div>
+
+                    <div id="frontCharts">
+                        <div class="chart-card">
+                            <h3 style="margin-bottom: 15px; font-size: 16px;">肩・骨盤の傾き角度 (°)</h3>
+                            <canvas id="angleChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3 style="margin-bottom: 15px; font-size: 16px;">体幹のズレ (%)</h3>
+                            <canvas id="trunkShiftChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div id="sideCharts" style="display: none;">
+                        <div class="chart-card">
+                            <h3 style="margin-bottom: 15px; font-size: 16px;">首のズレ (FHP) & ラウンド肩 (%)</h3>
+                            <canvas id="sideShiftChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3 style="margin-bottom: 15px; font-size: 16px;">骨盤前後傾 (°)</h3>
+                            <canvas id="sidePelvisChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
-                <div id="sideCharts" style="display: none;">
-                    <div class="chart-card">
-                        <h3 style="margin-bottom: 15px; font-size: 16px;">首のズレ・ラウンド肩 (%)</h3>
-                        <canvas id="shiftChart"></canvas>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">※ 数値が低いほど垂直に近い良好な状態です。</p>
-                    </div>
+                <div id="noDataArea" class="no-data">
+                    <span style="font-size: 60px; display: block; margin-bottom: 20px;">👤</span>
+                    <p style="font-size: 16px;">左のリストから患者を選択してください。</p>
                 </div>
-            </div>
-
-            <div id="noDataArea" class="no-data">
-                <span style="font-size: 40px; display: block; margin-bottom: 10px;">📊</span>
-                顧客IDを入力して検索してください。
-            </div>
-        </main>
+            </main>
+        </div>
     </div>
 
     <script>
-        let angleChart, shiftChart;
-        let allData = [];
+        let angleChart, trunkShiftChart, sideShiftChart, sidePelvisChart;
+        let allPatients = [];
+        let currentPatientId = "{{ patient_id }}";
 
-        async function loadStats() {
-            const pid = document.getElementById('patientIdInput').value;
-            if (!pid) return;
+        // 初期化ロード
+        window.onload = async () => {
+            await loadPatientList();
+            if (currentPatientId) {
+                selectPatient(currentPatientId);
+            }
+        };
 
+        // 患者リスト取得
+        async function loadPatientList() {
+            try {
+                const res = await fetch('/api/recent_patients');
+                allPatients = await res.json();
+                renderPatientList(allPatients);
+            } catch (e) {
+                console.error('Failed to load patients', e);
+            }
+        }
+
+        function renderPatientList(list) {
+            const container = document.getElementById('patientList');
+            container.innerHTML = '';
+            
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">患者が見つかりません</div>';
+                return;
+            }
+
+            list.forEach(p => {
+                const div = document.createElement('div');
+                div.className = `patient-item ${p.id === currentPatientId ? 'active' : ''}`;
+                div.innerHTML = `<span class="icon">👤</span> <span>${p.id}</span>`;
+                div.onclick = () => selectPatient(p.id);
+                container.appendChild(div);
+            });
+        }
+
+        function filterPatients() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allPatients.filter(p => p.id.toLowerCase().includes(query));
+            renderPatientList(filtered);
+        }
+
+        async function selectPatient(pid) {
+            currentPatientId = pid;
+            document.querySelectorAll('.patient-item').forEach(el => {
+                el.classList.toggle('active', el.textContent.includes(pid));
+            });
+            document.getElementById('currentPatientName').textContent = `カルテ: ${pid}`;
+            
             try {
                 const res = await fetch(`/api/patient_stats?patient_id=${encodeURIComponent(pid)}`);
                 const result = await res.json();
@@ -125,11 +249,11 @@
                     allData = result.data;
                     document.getElementById('statsContent').style.display = 'block';
                     document.getElementById('noDataArea').style.display = 'none';
-                    renderCharts();
+                    renderCharts(result.data);
                 } else {
                     document.getElementById('statsContent').style.display = 'none';
                     document.getElementById('noDataArea').style.display = 'block';
-                    document.getElementById('noDataArea').textContent = 'データが見つかりませんでした。';
+                    document.getElementById('noDataArea').innerHTML = '<span style="font-size:60px; display:block; margin-bottom:20px;">⚠️</span>データが存在しません。';
                 }
             } catch (e) {
                 console.error(e);
@@ -139,59 +263,81 @@
         function switchTheme(mode) {
             const btns = document.querySelectorAll('.tab-btn');
             btns.forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            if (mode === 'front') document.getElementById('btnFront').classList.add('active');
+            else document.getElementById('btnSide').classList.add('active');
 
             document.getElementById('frontCharts').style.display = mode === 'front' ? 'block' : 'none';
             document.getElementById('sideCharts').style.display = mode === 'side' ? 'block' : 'none';
         }
 
-        function renderCharts() {
-            const frontData = allData.filter(d => d.view === 'front' || d.view.includes('front'));
-            const sideData = allData.filter(d => d.view === 'side' || d.view.includes('side'));
+        function renderCharts(data) {
+            const frontData = data.filter(d => d.view.includes('front'));
+            const sideData = data.filter(d => d.view.includes('side'));
 
-            // Destroy previous charts
-            if (angleChart) angleChart.destroy();
-            if (shiftChart) shiftChart.destroy();
+            // Destroy previous
+            [angleChart, trunkShiftChart, sideShiftChart, sidePelvisChart].forEach(c => c && c.destroy());
 
-            const chartConfig = (labels, datasets) => ({
-                type: 'line',
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { labels: { color: '#94a3b8' } } },
-                    scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
-                    }
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { labels: { color: '#94a3b8', font: { size: 12 } } } },
+                scales: {
+                    x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }
                 }
+            };
+
+            // 1. Front: Angles
+            angleChart = new Chart(document.getElementById('angleChart'), {
+                type: 'line',
+                data: {
+                    labels: frontData.map(d => d.date),
+                    datasets: [
+                        { label: '肩の傾き', data: frontData.map(d => Math.abs(d.shoulder_angle)), borderColor: '#4facfe', tension: 0.3, pointRadius: 4 },
+                        { label: '骨盤の傾き', data: frontData.map(d => Math.abs(d.pelvis_angle)), borderColor: '#00e676', tension: 0.3, pointRadius: 4 }
+                    ]
+                },
+                options: commonOptions
             });
 
-            // Angle Chart (Front)
-            angleChart = new Chart(document.getElementById('angleChart'), chartConfig(
-                frontData.map(d => d.date),
-                [
-                    { label: '肩の傾き', data: frontData.map(d => Math.abs(d.shoulder_angle)), borderColor: '#4facfe', tension: 0.3, fill: false },
-                    { label: '骨盤の傾き', data: frontData.map(d => Math.abs(d.pelvis_angle)), borderColor: '#00e676', tension: 0.3, fill: false }
-                ]
-            ));
+            // 2. Front: Trunk Shift
+            trunkShiftChart = new Chart(document.getElementById('trunkShiftChart'), {
+                type: 'line',
+                data: {
+                    labels: frontData.map(d => d.date),
+                    datasets: [
+                        { label: '体幹ズレ', data: frontData.map(d => d.trunk), borderColor: '#f9d423', tension: 0.3, pointRadius: 4 }
+                    ]
+                },
+                options: commonOptions
+            });
 
-            // Shift Chart (Side)
-            shiftChart = new Chart(document.getElementById('shiftChart'), chartConfig(
-                sideData.map(d => d.date),
-                [
-                    { label: '首のズレ (FHP)', data: sideData.map(d => d.fhp), borderColor: '#fbc2eb', tension: 0.3, fill: false },
-                    { label: 'ラウンド肩', data: sideData.map(d => d.rs), borderColor: '#a18cd1', tension: 0.3, fill: false }
-                ]
-            ));
+            // 3. Side: Shifts
+            sideShiftChart = new Chart(document.getElementById('sideShiftChart'), {
+                type: 'line',
+                data: {
+                    labels: sideData.map(d => d.date),
+                    datasets: [
+                        { label: '首のズレ (FHP)', data: sideData.map(d => d.fhp), borderColor: '#fbc2eb', tension: 0.3 },
+                        { label: 'ラウンド肩', data: sideData.map(d => d.rs), borderColor: '#a18cd1', tension: 0.3 }
+                    ]
+                },
+                options: commonOptions
+            });
+
+            // 4. Side: Pelvis Angle
+            sidePelvisChart = new Chart(document.getElementById('sidePelvisChart'), {
+                type: 'line',
+                data: {
+                    labels: sideData.map(d => d.date),
+                    datasets: [
+                        { label: '骨盤傾斜角', data: sideData.map(d => d.pelvis_angle), borderColor: '#ff9a9e', tension: 0.3 }
+                    ]
+                },
+                options: commonOptions
+            });
         }
-
-        // ページ読み込み時にIDがあれば自動検索
-        window.onload = () => {
-            if (document.getElementById('patientIdInput').value) {
-                loadStats();
-            }
-        };
     </script>
 </body>
 </html>
