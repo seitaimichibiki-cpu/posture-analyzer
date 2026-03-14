@@ -251,7 +251,7 @@ class PoseAnalyzer:
 
     def _save_comparison_report(self, img1, img2, panel, output_path, title):
         # [Before][After][Panel] の高さを揃える
-        h2, w2 = img2.shape[:2]; hp, wp = panel.shape[:2]
+        h1, w1 = img1.shape[:2]; h2, w2 = img2.shape[:2]; hp, wp = panel.shape[:2]
         # 凡例を画像の下に収めるための必要最小高さを確保
         max_h = max(h1 + 320, h2 + 320, hp)
         
