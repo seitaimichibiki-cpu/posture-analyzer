@@ -591,17 +591,6 @@ def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
     ih = img.shape[0]
     for y in range(max(py_top, 10), min(py_bot, ih), 20):
         cv2.line(img, (lx, y), (lx, min(y+10, py_bot)), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
-    
-    pts_lm = [lm[0], lm[11], lm[23], lm[27]] # 適当な代表点
-    # 現実に即してランドマーク中点を計算
-    pts = [
-        midpoint(px_zoom(lm[7],w,h,x1,y1,scale),  px_zoom(lm[8],w,h,x1,y1,scale)),
-        midpoint(px_zoom(lm[11],w,h,x1,y1,scale), px_zoom(lm[12],w,h,x1,y1,scale)),
-        midpoint(px_zoom(lm[23],w,h,x1,y1,scale), px_zoom(lm[24],w,h,x1,y1,scale)),
-        (lx, int((max(lm[27].y, lm[28].y)*h - y1)*scale))
-    ]
-    for pt in pts:
-        cv2.circle(img, pt, 6, MIDLINE_COL_BGR, -1)
         cv2.circle(img, pt, 8, (255, 255, 255), 1)
         if pt[0] != lx:
             cv2.arrowedLine(img, (lx, pt[1]), (pt[0], pt[1]), MIDLINE_COL_BGR, 2, cv2.LINE_AA, tipLength=0.2)
@@ -670,11 +659,20 @@ def build_panel(items, risks, pw, ih):
     # スコアリスト作成
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
+    total_pt = _calc_total_score(scores)
     
-    ph = max(_measure_panel_height(items, risks) + 500, ih)
+    ph = max(_measure_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
-    y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
+    
+    # ─── 総合スコア表示 ─────
+    y = 65
+    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
+    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
+    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), YELLOW if total_pt > 70 else (255,100,100))
+    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
+    
+    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
     
     # 既存の計測結果セクション
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
@@ -874,11 +872,20 @@ def build_side_panel(items, risks, pw, ih):
     # スコアリスト作成
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
+    total_pt = _calc_total_score(scores)
 
-    ph = max(_measure_side_panel_height(items, risks) + 500, ih)
+    ph = max(_measure_side_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
-    y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
+    
+    # ─── 総合スコア表示 ─────
+    y = 65
+    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
+    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
+    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), YELLOW if total_pt > 70 else (255,100,100))
+    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
+    
+    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
