@@ -552,19 +552,55 @@ def _get_side_score(key, val):
     if val < t[2]: return "△"
     return "×"
 
-def _calc_total_score(item_scores, risk_scores):
-    """主要項目とリスク項目で重みを変えた総合点算出（甘口設定）"""
+def _calc_total_score(items, risks):
+    """
+    実測値に基づく連続的な減点ロジック（高精度・精密版）
+    レイアウトを崩さず、裏側の計算のみを1度/1%単位で精密化
+    """
+    def _lerp(x, x0, x1, y0, y1):
+        if x1 == x0: return y0
+        return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+
     deduction = 0
-    # 主要項目（計測結果）: やや厳しめだがマイルドに
-    i_map = {"◎": 0, "○": 1.5, "△": 6, "×": 12}
-    # リスク項目（推定）: よりマイルドに
-    r_map = {"◎": 0, "○": 0.5, "△": 2, "×": 5}
     
-    for s in item_scores:
-        deduction += i_map.get(s, 1)
-    for s in risk_scores:
-        deduction += r_map.get(s, 0.5)
-        
+    # 1. 主要項目（計測結果）の精密減点
+    # 主要項目の配点重み（甘口設定を維持しつつ連続化）
+    # ◎(0.0) -> P0(0.0), T0 -> P1(1.5), T1 -> P2(6.0), T2 -> P3(12.0)
+    P_LEVELS = [0.0, 1.5, 6.0, 12.0]
+    
+    for it in items:
+        name, val = it.get("name", ""), abs(it.get("diff", 0))
+        # 文字列が含まれる場合は数値に変換（側面用対応）
+        if isinstance(val, str):
+            try: val = float(val.replace('%','').replace('°',''))
+            except: val = 0.0
+            
+        # 対応するしきい値を取得
+        th = None
+        for k in THRESHOLDS:
+            if k in name: th = THRESHOLDS[k]; break
+        if not th:
+            for k in SIDE_THRESHOLDS:
+                if k in name: th = SIDE_THRESHOLDS[k]; break
+        if not th: th = TRUNK_SHIFT_TH if ("ズレ" in name or "領域" in name or "ライン" in name) else (1.0, 2.0, 4.0)
+
+        # 連続減点計算
+        if val <= 0: d = 0
+        elif val <= th[0]: d = _lerp(val, 0, th[0], P_LEVELS[0], P_LEVELS[1])
+        elif val <= th[1]: d = _lerp(val, th[0], th[1], P_LEVELS[1], P_LEVELS[2])
+        elif val <= th[2]: d = _lerp(val, th[1], th[2], P_LEVELS[2], P_LEVELS[3])
+        else: d = P_LEVELS[3] + (val - th[2]) * 0.5 # 超過分は緩やかに加算
+        deduction += d
+
+    # 2. リスク項目（推定）の減点（こちらは重要度を下げる）
+    # リスク項目は判定文字(◎○△×)に応じたマイルドな減点
+    R_MAP = {"◎": 0, "○": 0.5, "△": 2, "×": 5}
+    for r in risks:
+        deduction += R_MAP.get(r[1], 0.5)
+
+    # 3. 算出した点数を100点から引く
+    # 計測項目数に応じて最大減点を正規化（項目が多いほど1項目の影響を調整）
+    # 現在 4〜6項目 + リスク数項目 なので、そのまま合算してバランスが良い
     return int(max(0, 100 - deduction))
 
 def direction(a): return "右下がり" if a >= 0 else "左下がり"
@@ -687,7 +723,7 @@ def build_panel(items, risks, pw, ih):
     i_scores = [it["score"] for it in items]
     r_scores = [r[1] for r in risks]
     f_risks = calc_future_risks(i_scores + r_scores)
-    total_pt = _calc_total_score(i_scores, r_scores)
+    total_pt = _calc_total_score(items, risks)
     
     ph = max(_measure_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
@@ -903,7 +939,7 @@ def build_side_panel(items, risks, pw, ih):
     i_scores = [it["score"] for it in items]
     r_scores = [r[1] for r in risks]
     f_risks = calc_future_risks(i_scores + r_scores)
-    total_pt = _calc_total_score(i_scores, r_scores)
+    total_pt = _calc_total_score(items, risks)
 
     ph = max(_measure_side_panel_height(items, risks) + 580, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
