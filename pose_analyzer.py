@@ -551,6 +551,14 @@ def _get_side_score(key, val):
     if val < t[2]: return "△"
     return "×"
 
+def _calc_total_score(scores):
+    """一律の減点方式による総合点算出"""
+    deduction = 0
+    mapping = {"◎": 0, "○": 2, "△": 8, "×": 15}
+    for s in scores:
+        deduction += mapping.get(s, 5)
+    return max(0, 100 - deduction)
+
 def direction(a): return "右下がり" if a >= 0 else "左下がり"
 def pxcoord(lm, w, h): return (int(lm.x*w), int(lm.y*h))
 def midpoint(p1, p2): return ((p1[0]+p2[0])//2, (p1[1]+p2[1])//2)
