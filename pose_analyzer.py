@@ -53,8 +53,8 @@ SCORE_RGB = {
     "◎": (80, 210, 100), "○": (80, 200, 240), "△": (255, 160, 40), "×": (230, 60, 50),
 }
 SCORE_BGR = {k: (v[2], v[1], v[0]) for k, v in SCORE_RGB.items()}
-PANEL_BG, LINE_COL = (24, 29, 48), (55, 65, 100)
-PANEL_BG_BGR = (PANEL_BG[2], PANEL_BG[1], PANEL_BG[0])
+PANEL_BG = (24, 29, 48); LINE_COL = (55, 65, 100)
+PANEL_BG_BGR = (48, 29, 24)
 WHITE, GRAY, YELLOW, GREEN_IDEAL = (240, 245, 255), (140, 150, 175), (255, 220, 80), (80, 220, 140)
 MIDLINE_COL_BGR, MIDLINE_COL_RGB = (220, 220, 50), (50, 220, 220)
 
@@ -763,8 +763,8 @@ def _draw_legend_block(draw, x, y, view):
         y += 15
     return y
 
-def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 100, 1400)
-def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 100, 1400)
+def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 750, 1600)
+def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 750, 1600)
 
 def calc_future_risks(scores):
     """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
@@ -772,9 +772,8 @@ def calc_future_risks(scores):
     weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
     total_val = sum(weights.get(s, 0) for s in scores)
     max_val = len(scores) * 6
-    if max_val == 0: return {}
-    
-    base_risk = (total_val / max_val) * 100
+    if max_val == 0: base_risk = 0
+    else: base_risk = (total_val / max_val) * 100
     
     # 部位別の重み付け (バイオメカニクス的推論)
     # 首(FHP)が悪いと自律神経、巻き肩・猫背だと血流・内臓、骨盤だと慢性痛
@@ -834,7 +833,8 @@ def build_panel(items, risks, pw, ih):
         y += 45
 
     # 🆕 生活習慣病予測セクション（改善されたレイアウト）
-    y += 18; dr.rectangle([(10,y),(pw-10,y+450)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
+    fr_box_h = 48 + 92 * len(f_risks) + 20
+    y += 18; dr.rectangle([(10,y),(pw-10,y+fr_box_h)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
     for fr in f_risks:
         # 項目の名称を一行目に配置
         draw_text(dr, (25,y), fr["name"], fB, WHITE)
@@ -1037,7 +1037,8 @@ def build_side_panel(items, risks, pw, ih):
         y += 45
 
     # 🆕 生活習慣病予測セクション（側面：改善されたレイアウト）
-    y += 18; dr.rectangle([(10,y),(pw-10,y+450)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
+    fr_box_h = 48 + 92 * len(f_risks) + 20
+    y += 18; dr.rectangle([(10,y),(pw-10,y+fr_box_h)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
     for fr in f_risks:
         # 項目の名称を一行目に配置
         draw_text(dr, (25,y), fr["name"], fB, WHITE)
