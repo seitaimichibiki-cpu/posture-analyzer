@@ -291,7 +291,7 @@ class PoseAnalyzer:
         draw_cog_indicator(img_muscle, lm, w, h, x1, y1, scale, 'front')
 
         # 4. ラベル描画（はみ出し防止付き）
-        pil_photo = cv2pil(img_final); dp = ImageDraw.Draw(pil_photo); fl = get_font(20); fl_s = get_font(16)
+        pil_photo = cv2pil(img_pose); dp = ImageDraw.Draw(pil_photo); fl = get_font(20); fl_s = get_font(16)
         def lbl_zoom(lm_a, lm_b, text, sc):
             p1 = px_zoom(lm_a, w, h, x1, y1, scale); p2 = px_zoom(lm_b, w, h, x1, y1, scale)
             mx, my = (p1[0]+p2[0])//2, (p1[1]+p2[1])//2 - 25
