@@ -617,22 +617,36 @@ def estimate_muscle_tension(landmarks, view):
     tensions = {}
     lm = landmarks
     if view == 'front':
-        # 正面視：左右差に基づく推定
+        # 正面視：左右の傾きとズレに基づく推定
+        # 頭部・首周り (Head Tilt & Shift)
+        head_a = abs(calc_angle(lm[7], lm[8], 100, 100))
+        head_s = abs(lm[0].x - (lm[11].x + lm[12].x)/2) * 50 # ズレ感度
+        tensions['neck_stress'] = min(head_a * 0.1 + head_s, 1.0)
+        
+        # 肩 (Shoulder Tilt)
         shldr_a = abs(calc_angle(lm[11], lm[12], 100, 100))
-        pelvis_a = abs(calc_angle(lm[23], lm[24], 100, 100))
-        tensions['trapezius_l'] = min(shldr_a / 5.0, 1.0) if lm[11].y > lm[12].y else 0.1
-        tensions['trapezius_r'] = min(shldr_a / 5.0, 1.0) if lm[12].y > lm[11].y else 0.1
-        tensions['erector_spinae_l'] = min(pelvis_a / 4.0, 1.0) if lm[23].y > lm[24].y else 0.2
-        tensions['erector_spinae_r'] = min(pelvis_a / 4.0, 1.0) if lm[24].y > lm[23].y else 0.2
+        tensions['trapezius_l'] = min(shldr_a * 0.2, 1.0) if lm[11].y > lm[12].y else 0.1
+        tensions['trapezius_r'] = min(shldr_a * 0.2, 1.0) if lm[12].y > lm[11].y else 0.1
+        
+        # 腰背部 (Pelvic Tilt & Shift / Body Midline)
+        pel_a = abs(calc_angle(lm[23], lm[24], 100, 100))
+        pel_s = abs(lm[23].x + lm[24].x - lm[11].x - lm[12].x) * 20
+        tensions['erector_spinae_l'] = min(pel_a * 0.15 + pel_s, 0.9)
+        tensions['erector_spinae_r'] = min(pel_a * 0.15 + pel_s, 0.9)
     else:
-        # 側面視：前後ズレに基づく推定
-        # 首の筋肉 (Splenius/SCM)
-        fhp = abs(lm[0].x - lm[11].x) # 簡易的なFHP
-        tensions['neck_extensor'] = min(fhp * 5.0, 1.0)
-        # 腰 (Lumbar)
-        tensions['lumbar_extensor'] = min(abs(lm[11].x - lm[23].x) * 3.0, 0.8)
-        # 前もも/裏もも
-        tensions['quads'] = min(abs(lm[23].x - lm[25].x) * 4.0, 0.7)
+        # 側面視：前後ズレに基づく推定 (より鋭敏に)
+        # 首 (FHP)
+        fhp = abs(lm[0].x - lm[11].x) * 50
+        tensions['neck_extensor'] = min(fhp * 0.8, 1.0)
+        
+        # 腰 (Lumbar / Trunk Shift)
+        trunk_s = abs(lm[11].x - lm[23].x) * 50
+        tensions['lumbar_extensor'] = min(trunk_s * 0.7, 0.9)
+        
+        # 大腿部 (Knee alignment)
+        quad_s = abs(lm[23].x - lm[25].x) * 50
+        tensions['quads'] = min(quad_s * 0.5, 0.8)
+    return tensions
     return tensions
 
 def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
@@ -653,33 +667,27 @@ def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
 
     # 部位別の緊張度を可視化
     for part, t in tensions.items():
-        if t < 0.25: continue # しきい値を少し下げて感度を向上
+        if t < 0.15: continue # しきい値を下げて、より多くの部位を表示
         
         if part.startswith('trapezius'):
             idx = 11 if '_l' in part else 12
             draw_tension_blob(lm[idx], t, (0, 100, 255), "Trapezius")
-        elif part == 'neck_extensor':
-            # 首の付け根付近
+        elif part == 'neck_stress' or part == 'neck_extensor':
+            # 首の付け根
             class MidPoint:
                 def __init__(self, x, y):
-                    self.x = x
-                    self.y = y
-                    self.visibility = 1.0
+                    self.x, self.y, self.visibility = x, y, 1.0
             mn = MidPoint((lm[7].x+lm[8].x)/2, (lm[7].y+lm[11].y)/2)
             draw_tension_blob(mn, t, (0, 120, 255), "Neck Stress")
-        elif part.startswith('erector_spinae'):
+        elif part.startswith('erector_spinae') or part == 'lumbar_extensor':
+            # 背負筋・腰部
             idx = 23 if '_l' in part else 24
             draw_tension_blob(lm[idx], t, (0, 80, 220), "Back Stress")
-        elif part == 'lumbar_extensor':
-            # 腰部 (L3付近)
-            draw_tension_blob(lm[23], t, (0, 80, 220), "Lumbar Stress")
         elif part == 'quads':
             # 大腿部
             class ThighPoint:
                 def __init__(self, x, y):
-                    self.x = x
-                    self.y = y
-                    self.visibility = 1.0
+                    self.x, self.y, self.visibility = x, y, 1.0
             mt = ThighPoint((lm[23].x + lm[25].x) / 2, (lm[23].y + lm[25].y) / 2)
             draw_tension_blob(mt, t, (0, 50, 200), "Thigh Tension")
 
