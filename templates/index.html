@@ -304,8 +304,9 @@
         // --- Autocomplete Logic ---
         const pi = document.getElementById('patient_id');
         const pr = document.getElementById('patient-search-results');
-        pi.oninput = async () => {
+        pi.addEventListener('input', async () => {
             const q = pi.value.trim();
+            checkReady(); // バリデーションを実行
             if (q.length < 1) { pr.style.display = 'none'; return; }
             const res = await fetch(`/api/patients/search?q=${encodeURIComponent(q)}`);
             const pts = await res.json();
@@ -313,8 +314,12 @@
                 pr.innerHTML = pts.map(n => `<div class="line-search-item" onclick="selectPt('${n}')">${n}</div>`).join('');
                 pr.style.display = 'block';
             } else { pr.style.display = 'none'; }
-        };
-        function selectPt(n) { pi.value = n; pr.style.display = 'none'; }
+        });
+        function selectPt(n) { 
+            pi.value = n; 
+            pr.style.display = 'none'; 
+            checkReady(); // 選択時にもバリデーションを実行
+        }
 
         function toggleGuide(show) {
             document.querySelectorAll('.guide-overlay').forEach(el => el.style.display = show ? 'block' : 'none');
