@@ -108,12 +108,16 @@ class PoseAnalyzer:
 
         # 後処理
         res = None
+        # 出力パスを姿勢図と筋肉図に分ける
+        base, ext = os.path.splitext(output_path)
+        muscle_output_path = f"{base}_muscle{ext}"
+        
         if view == 'front':
-            success, data = self._analyze_front(img, lm, w, h, output_path)
-            res = {'success': success, 'data': data, 'view': 'front'}
+            success, data = self._analyze_front(img, lm, w, h, output_path, muscle_output_path)
+            res = {'success': success, 'data': data, 'view': 'front', 'muscle_report_path': muscle_output_path}
         else:
-            success, data = self._analyze_side(img, lm, w, h, output_path)
-            res = {'success': success, 'data': data, 'view': 'side'}
+            success, data = self._analyze_side(img, lm, w, h, output_path, muscle_output_path)
+            res = {'success': success, 'data': data, 'view': 'side', 'muscle_report_path': muscle_output_path}
             
         # 明示的なメモリ解放
         del mp_image, result, img
@@ -250,7 +254,7 @@ class PoseAnalyzer:
         return "front" if shldr_dx > nose_to_leye * 1.5 else "side"
 
     # ── 内部解析ロジック (正面) ──
-    def _analyze_front(self, img, lm, w, h, output_path):
+    def _analyze_front(self, img, lm, w, h, output_path, muscle_output_path):
         # 1. 解析（数値計算のみ先に実施）
         head_a   = calc_angle(lm[7],  lm[8],  w, h)
         shldr_a  = calc_angle(lm[11], lm[12], w, h)
@@ -273,16 +277,18 @@ class PoseAnalyzer:
         img_final = cv2.resize(img_cropped, (int(img_cropped.shape[1] * scale), target_ph), interpolation=cv2.INTER_CUBIC)
         fw, fh = img_final.shape[1], img_final.shape[0]
 
-        # 3. 描画（リサイズ済みの最終画像に対して実施）
-        draw_skeleton_zoom(img_final, lm, w, h, x1, y1, scale)
-        draw_meas_line_zoom(img_final, lm[7],  lm[8],  sc_head,   w, h, x1, y1, scale)
-        draw_meas_line_zoom(img_final, lm[23], lm[24], sc_pelvis, w, h, x1, y1, scale)
-        draw_midline_zoom(img_final, lm, w, h, x1, y1, scale)
+        # 3. 描画 (姿勢図)
+        img_pose = img_final.copy()
+        draw_skeleton_zoom(img_pose, lm, w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_pose, lm[7],  lm[8],  sc_head,   w, h, x1, y1, scale)
+        draw_meas_line_zoom(img_pose, lm[23], lm[24], sc_pelvis, w, h, x1, y1, scale)
+        draw_midline_zoom(img_pose, lm, w, h, x1, y1, scale)
 
-        # 筋肉緊張・重心 (Phase 23/24)
+        # 3b. 描画 (筋肉図)
+        img_muscle = img_final.copy()
         tensions = estimate_muscle_tension(lm, 'front')
-        draw_muscle_heatmap(img_final, lm, tensions, w, h, x1, y1, scale)
-        draw_cog_indicator(img_final, lm, w, h, x1, y1, scale, 'front')
+        draw_muscle_heatmap(img_muscle, lm, tensions, w, h, x1, y1, scale)
+        draw_cog_indicator(img_muscle, lm, w, h, x1, y1, scale, 'front')
 
         # 4. ラベル描画（はみ出し防止付き）
         pil_photo = cv2pil(img_final); dp = ImageDraw.Draw(pil_photo); fl = get_font(20); fl_s = get_font(16)
@@ -310,7 +316,7 @@ class PoseAnalyzer:
             draw_x = max(10, min(px + 10, fw - 80))
             dp.text((draw_x, py - 5), text, font=fl_s, fill=MIDLINE_COL_RGB, stroke_width=1, stroke_fill=(10,12,20))
 
-        img_final = pil2cv2(np.array(pil_photo))
+        img_pose_final = pil2cv2(np.array(pil_photo))
         risk_msgs = calc_body_risks(sc_head, sc_shldr, sc_pelvis, ts_score, shldr_a, pelvis_a)
         score_items = [
             {"name": "頭部（耳の傾き）", "normal": 0.0, "measured": head_a, "diff": abs(head_a), "direction": direction(head_a), "score": sc_head},
@@ -321,7 +327,11 @@ class PoseAnalyzer:
             {"name": "骨盤ズレ（正中線）", "normal": 0.0, "measured": pelv_shift_pct, "diff": abs(pelv_shift_pct), "direction": "右偏位" if pelv_shift_pct > 0 else "左偏位", "score": ts_score},
         ]
         panel = build_panel(score_items, risk_msgs, 560, fh)
-        success = self._save_final_report(img_final, panel, output_path, "正面")
+        
+        # 保存
+        s1 = self._save_final_report(img_pose_final, panel, output_path, "正面：姿勢解析")
+        s2 = self._save_final_report(img_muscle, panel, muscle_output_path, "正面：筋肉緊張予測")
+        success = s1 and s2
         
         # 数値データを辞書で返す
         data = {
@@ -335,7 +345,7 @@ class PoseAnalyzer:
         return success, data
 
     # ── 内部解析ロジック (側面) ──
-    def _analyze_side(self, img, lm, w, h, output_path):
+    def _analyze_side(self, img, lm, w, h, output_path, muscle_output_path):
         # 1. 解析（数値計算のみ先に実施）
         mouth_x, ear_avg_x = (lm[9].x + lm[10].x) / 2, (lm[7].x + lm[8].x) / 2
         facing_right = mouth_x > ear_avg_x
@@ -363,9 +373,10 @@ class PoseAnalyzer:
         img_final = cv2.resize(img_cropped, (int(img_cropped.shape[1] * scale), target_ph), interpolation=cv2.INTER_CUBIC)
         fw, fh = img_final.shape[1], img_final.shape[0]
 
-        # 3. 描画
-        draw_skeleton_zoom(img_final, lm, w, h, x1, y1, scale)
-        # 重心線
+        # 3. 描画 (姿勢図)
+        img_pose = img_final.copy()
+        draw_skeleton_zoom(img_pose, lm, w, h, x1, y1, scale)
+        # 重心線などの描画ロジックは img_pose に対して行う
         ankle_px = px_zoom(ankle, w, h, x1, y1, scale)
         ear_px = (int((ear_px_orig[0]-x1)*scale), int((ear_px_orig[1]-y1)*scale))
         shldr_px = px_zoom(shldr, w, h, x1, y1, scale)
@@ -373,16 +384,17 @@ class PoseAnalyzer:
         
         ankle_top_y = max(ear_px[1] - 50, 20)
         for yy in range(ankle_top_y, ankle_px[1], 25):
-            cv2.line(img_final, (ankle_px[0], yy), (ankle_px[0], min(yy+12, ankle_px[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
+            cv2.line(img_pose, (ankle_px[0], yy), (ankle_px[0], min(yy+12, ankle_px[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
         
         pts = [ear_px, shldr_px, hip_px, ankle_px]
-        for i in range(len(pts)-1): cv2.line(img_final, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
-        for pt in pts: cv2.circle(img_final, pt, 7, (200,200,50), -1)
+        for i in range(len(pts)-1): cv2.line(img_pose, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
+        for pt in pts: cv2.circle(img_pose, pt, 7, (200,200,50), -1)
 
-        # 筋肉緊張・重心 (Phase 23/24)
+        # 3b. 描画 (筋肉図)
+        img_muscle = img_final.copy()
         tensions = estimate_muscle_tension(lm, 'side')
-        draw_muscle_heatmap(img_final, lm, tensions, w, h, x1, y1, scale)
-        draw_cog_indicator(img_final, lm, w, h, x1, y1, scale, 'side')
+        draw_muscle_heatmap(img_muscle, lm, tensions, w, h, x1, y1, scale)
+        draw_cog_indicator(img_muscle, lm, w, h, x1, y1, scale, 'side')
 
         # 水平偏差矢印
         def draw_h_diff_zoom(p_a, p_b, sc):
@@ -406,7 +418,7 @@ class PoseAnalyzer:
         s_lbl_zoom(hip_px, f"股 骨盤:{abs(pel_a):.1f}° {pel_sc}", pel_sc, dy=5)
         s_lbl_zoom(ankle_px, f"足 体幹:{abs(trunk_pct):.0f}% {trk_sc}", trk_sc, dy=5)
         
-        img_final = pil2cv2(np.array(pil_p))
+        img_pose_final = pil2cv2(np.array(pil_p))
         risk_msgs = calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, abs(fhp_pct), abs(rs_pct))
         score_items = [
             {"name":"前方頭位(FHP)","ideal":"0%","measured":f"{fhp_pct:+.1f}%","diff":f"{abs(fhp_pct):.1f}%","score":fhp_sc},
@@ -415,7 +427,11 @@ class PoseAnalyzer:
             {"name":"体幹ライン領域","ideal":"0%","measured":f"{trunk_pct:+.1f}%","diff":f"{abs(trunk_pct):.1f}%","score":trk_sc},
         ]
         panel = build_side_panel(score_items, risk_msgs, 560, fh)
-        success = self._save_final_report(img_final, panel, output_path, f"側面：{'右向き' if facing_right else '左向き'}")
+        
+        # 保存
+        s1 = self._save_final_report(img_pose_final, panel, output_path, f"側面：姿勢解析")
+        s2 = self._save_final_report(img_muscle, panel, muscle_output_path, f"側面：筋肉緊張予測")
+        success = s1 and s2
         
         # 数値データを辞書で返す
         data = {

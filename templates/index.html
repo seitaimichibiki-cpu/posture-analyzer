@@ -12,6 +12,15 @@
     <meta name="theme-color" content="#080a12">
     <link rel="apple-touch-icon" href="/static/icon-512.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        .result-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; }
+        .tab-btn { 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 10px 20px; 
+            border-radius: 12px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;
+        }
+        .tab-btn.active { background: var(--accent-gradient); color: white; border-color: transparent; box-shadow: 0 4px 15px rgba(0, 198, 255, 0.3); }
+        .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.1); color: white; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -132,11 +141,16 @@
                 <div style="text-align: center;">
                     <div class="spinner"></div>
                     <p style="font-weight: 700; letter-spacing: 1px; margin-bottom: 8px;">AI ANALYSIS IN PROGRESS</p>
-                    <p style="font-size: 13px; color: var(--text-muted);">姿勢の歪みをミリメートル単位で測定中...</p>
+                    <p id="loadingMessage" style="font-size: 13px; color: var(--accent); transition: all 0.3s;">姿勢の歪みをミリメートル単位で測定中...</p>
                 </div>
             </div>
 
-            <section id="resultSection" class="result-section" style="display: none;">
+                <!-- 結果表示タブ切り替え -->
+                <div class="result-tabs" style="display: none; margin-bottom: 15px;">
+                    <button id="tabPose" class="tab-btn active" onclick="switchResultTab('pose')">📊 姿勢解析</button>
+                    <button id="tabMuscle" class="tab-btn" onclick="switchResultTab('muscle')">🔥 筋肉緊張予測</button>
+                </div>
+
                 <div class="report-wrapper">
                     <img id="resultImage" src="" alt="Analysis Result">
                 </div>
@@ -230,6 +244,7 @@
             try {
                 document.getElementById('loadingOverlay').style.display = 'flex';
                 document.getElementById('resultSection').style.display = 'none';
+                startLoadingMessages();
 
                 let response;
                 if (viewMode === 'compare') {
@@ -254,18 +269,33 @@
                 alert('解析に失敗しました。');
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
+                stopLoadingMessages();
             }
         }
 
+        let currentPoseUrl = '';
+        let currentMuscleUrl = '';
+
         function handleResult(data) {
             if (data.success) {
-                const filename = data.report_url.split('/').pop();
-                document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
-                document.getElementById('downloadBtn').href = '/download/' + filename;
+                currentPoseUrl = data.report_url;
+                currentMuscleUrl = data.muscle_report_url || '';
                 
-                // 比較スライダーの処理 (Phase 20)
-                console.log('viewMode:', viewMode);
-                // 常にレポート画像を表示
+                const filename = currentPoseUrl.split('/').pop();
+                document.getElementById('resultImage').src = currentPoseUrl + '?t=' + Date.now();
+                
+                const downloadBtn = document.getElementById('downloadBtn');
+                if (downloadBtn) downloadBtn.href = '/download/' + filename;
+                
+                // タブの表示制御
+                const tabArea = document.querySelector('.result-tabs');
+                if (currentMuscleUrl) {
+                    tabArea.style.display = 'flex';
+                    switchResultTab('pose'); // 初期は姿勢
+                } else {
+                    tabArea.style.display = 'none';
+                }
+
                 const wrapper = document.querySelector('.report-wrapper');
                 if (wrapper) wrapper.style.display = 'block';
 
@@ -280,6 +310,50 @@
             }
         }
 
+        function switchResultTab(type) {
+            const img = document.getElementById('resultImage');
+            const btnPose = document.getElementById('tabPose');
+            const btnMuscle = document.getElementById('tabMuscle');
+            if (!img || !btnPose || !btnMuscle) return;
+            
+            if (type === 'pose') {
+                img.src = currentPoseUrl + '?t=' + Date.now();
+                btnPose.classList.add('active');
+                btnMuscle.classList.remove('active');
+            } else {
+                img.src = currentMuscleUrl + '?t=' + Date.now();
+                btnMuscle.classList.add('active');
+                btnPose.classList.remove('active');
+            }
+        }
+
+        let loadingInterval;
+        function startLoadingMessages() {
+            const msgEl = document.getElementById('loadingMessage');
+            const messages = [
+                "人物の骨格を特定中...",
+                "首の角度をミリメートル単位で測定中...",
+                "肩の傾きと左右差を計算中...",
+                "骨盤のズレと回旋を解析中...",
+                "体幹の重心移動をシミュレーション中...",
+                "将来的な健康リスクを予測中...",
+                "最適な改善アドバイスを生成中..."
+            ];
+            let i = 0;
+            msgEl.textContent = messages[0];
+            loadingInterval = setInterval(() => {
+                i = (i + 1) % messages.length;
+                msgEl.style.opacity = 0;
+                setTimeout(() => {
+                    msgEl.textContent = messages[i];
+                    msgEl.style.opacity = 1;
+                }, 300);
+            }, 2000);
+        }
+
+        function stopLoadingMessages() {
+            clearInterval(loadingInterval);
+        }
 
         function resizeImage(file, maxSide) {
             return new Promise((resolve) => {

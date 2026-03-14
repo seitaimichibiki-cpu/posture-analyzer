@@ -793,7 +793,11 @@ def analyze():
 
         if res and res.get('success'):
             # Cloudinaryへのアップロード
+            output_path = output_path # 標準の姿勢レポート
+            muscle_output_path = res.get('muscle_report_path')
+            
             cloud_url = upload_to_cloudinary(output_path)
+            muscle_cloud_url = upload_to_cloudinary(muscle_output_path) if muscle_output_path else None
             input_cloud_url = upload_to_cloudinary(input_path)
 
             # ログ記録
@@ -833,6 +837,7 @@ def analyze():
             return jsonify({
                 'success': True,
                 'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/{os.path.basename(output_path)}'),
+                'muscle_report_url': muscle_cloud_url if muscle_cloud_url else (url_for('static', filename=f'uploads/{os.path.basename(muscle_output_path)}') if muscle_output_path else None),
                 'advice': record.advice
             })
         else:
