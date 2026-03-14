@@ -22,10 +22,10 @@ from mediapipe.tasks.python import vision
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 FONT_CANDIDATES = [
-    os.path.join(SCRIPT_DIR, "NotoSansJP.ttf"),
-    "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
-    "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
     "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+    "/System/Library/Fonts/SFArabic.ttf",
+    os.path.join(SCRIPT_DIR, "NotoSansJP.ttf"),
 ]
 
 def get_font(size):
