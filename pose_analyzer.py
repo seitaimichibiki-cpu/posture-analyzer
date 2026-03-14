@@ -399,8 +399,8 @@ class PoseAnalyzer:
         # 水平偏差矢印
         def draw_h_diff_zoom(p_a, p_b, sc):
             col = SCORE_BGR[sc]; my = (p_a[1]+p_b[1])//2
-            cv2.arrowedLine(img_final, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.2)
-            cv2.circle(img_final, p_a, 7, col, -1); cv2.circle(img_final, p_b, 7, col, -1)
+            cv2.arrowedLine(img_pose, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.2)
+            cv2.circle(img_pose, p_a, 7, col, -1); cv2.circle(img_pose, p_b, 7, col, -1)
         draw_h_diff_zoom(ear_px, shldr_px, fhp_sc)
 
         # 4. ラベル描画（はみ出し防止）
