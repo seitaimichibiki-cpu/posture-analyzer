@@ -256,7 +256,7 @@
                 if (viewMode === 'compare') {
                     formData.append('image_before', fileB);
                     formData.append('image_after', fileA);
-                    formData.append('view_type', 'side'); // 比較は側面固定想定
+                    formData.append('view_type', 'auto'); // 自動判別に変更
                     response = await fetch('/compare', { method: 'POST', body: formData });
                 } else {
                     formData.append('image', fileSingle);
