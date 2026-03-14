@@ -766,9 +766,11 @@ def analyze():
 
     # ファイル名をユニークにする
     ext = os.path.splitext(file.filename)[1]
-    filename = f"{uuid.uuid4()}{ext}"
-    input_path = os.path.join(UPLOAD_FOLDER, f"input_{filename}")
-    output_path = os.path.join(UPLOAD_FOLDER, f"report_{filename}")
+    uid = uuid.uuid4()
+    filename = f"{uid}{ext}"
+    # 出力レポートは常にOpenCVが確実に書き込める.jpg形式に固定する
+    input_path = os.path.join(UPLOAD_FOLDER, f"input_{uid}{ext}")
+    output_path = os.path.join(UPLOAD_FOLDER, f"report_{uid}.jpg")
     
     file.save(input_path)
 
