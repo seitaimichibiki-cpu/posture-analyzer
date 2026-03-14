@@ -257,6 +257,14 @@
                 document.getElementById('resultImage').src = data.report_url + '?t=' + Date.now();
                 document.getElementById('downloadBtn').href = '/download/' + filename;
                 
+                // 比較スライダーの処理 (Phase 20)
+                if (viewMode === 'compare' && data.before_url && data.after_url) {
+                    showComparisonSlider(data.before_url, data.after_url);
+                } else {
+                    document.getElementById('comparisonSliderArea')?.remove();
+                    document.querySelector('.report-wrapper').style.display = 'block';
+                }
+
                 if (data.advice) {
                     document.getElementById('adviceText').textContent = data.advice;
                     document.getElementById('adviceCard').style.display = 'block';
@@ -266,6 +274,43 @@
             } else {
                 alert('エラー: ' + data.error);
             }
+        }
+
+        function showComparisonSlider(beforeUrl, afterUrl) {
+            // 既存のスライダーがあれば削除
+            document.getElementById('comparisonSliderArea')?.remove();
+            
+            const area = document.createElement('div');
+            area.id = 'comparisonSliderArea';
+            area.className = 'comparison-slider';
+            area.innerHTML = `
+                <div class="comp-badge badge-after">AFTER (今回)</div>
+                <img class="after-img" src="${afterUrl}" alt="After">
+                <div class="before-img" id="sliderBeforeImg">
+                    <div class="comp-badge badge-before">BEFORE (以前)</div>
+                    <img src="${beforeUrl}" alt="Before">
+                </div>
+                <div class="slider-handle" id="sliderHandle"></div>
+                <input type="range" min="0" max="100" value="50" class="slider-input" id="sliderInput">
+            `;
+            
+            const wrapper = document.querySelector('.report-wrapper');
+            wrapper.style.display = 'none'; // 統合レポート画像は隠す
+            wrapper.parentNode.insertBefore(area, wrapper);
+
+            const input = document.getElementById('sliderInput');
+            const beforeImg = document.getElementById('sliderBeforeImg');
+            const handle = document.getElementById('sliderHandle');
+
+            input.oninput = (e) => {
+                const val = e.target.value;
+                beforeImg.style.width = `${val}%`;
+                handle.style.left = `${val}%`;
+            };
+
+            // 初期位置
+            beforeImg.style.width = `50%`;
+            handle.style.left = `50%`;
         }
 
         function resizeImage(file, maxSide) {

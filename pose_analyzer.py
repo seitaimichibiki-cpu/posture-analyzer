@@ -157,6 +157,12 @@ class PoseAnalyzer:
             panel = build_comparison_panel(items1, items2, risks2, 560, 1400, "側面")
 
         # レポート合成 [Before][After][Panel]
+        # 個別画像の保存パス（スライダー用）
+        before_out = output_path.replace(".jpg", "_before.jpg")
+        after_out = output_path.replace(".jpg", "_after.jpg")
+        cv2.imwrite(before_out, res_img1)
+        cv2.imwrite(after_out, res_img2)
+
         success = self._save_comparison_report(res_img1, res_img2, panel, output_path, f"比較（{view}）")
 
         # 数値データを辞書で返す

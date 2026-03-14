@@ -1126,11 +1126,17 @@ def compare():
             except Exception as e:
                 print(f"Failed to save comparison numerical data: {e}")
 
+            # 個別画像のアップロード
+            before_cloud_url = upload_to_cloudinary(output_path.replace(".jpg", "_before.jpg"))
+            after_cloud_url = upload_to_cloudinary(output_path.replace(".jpg", "_after.jpg"))
+
             db.session.commit()
 
             return jsonify({
                 'success': True,
                 'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg'),
+                'before_url': before_cloud_url,
+                'after_url': after_cloud_url,
                 'advice': "比較解析を行いました。以前の状態（左）と今回の状態（右）の変化を確認してください。"
             })
         else:
