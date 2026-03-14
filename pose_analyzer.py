@@ -612,6 +612,11 @@ def calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, fval, rval):
     else: risks.append(("全身", "◎", "全身の垂直バランスは良好です。"))
     return risks
 
+def _calc_risk_row_h(msg): return 38 if len(msg) > MAX_CHARS else 24
+MAX_CHARS = 28
+def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
+def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
+
 def calc_future_risks(scores):
     """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
     # ◎=0, ○=1, △=3, ×=6 (重心値)
