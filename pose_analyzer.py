@@ -653,6 +653,8 @@ def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
 
     # 部位別の緊張度を可視化
     for part, t in tensions.items():
+        if t < 0.25: continue # しきい値を少し下げて感度を向上
+        
         if part.startswith('trapezius'):
             idx = 11 if '_l' in part else 12
             draw_tension_blob(lm[idx], t, (0, 100, 255), "Trapezius")
@@ -665,9 +667,21 @@ def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
                     self.visibility = 1.0
             mn = MidPoint((lm[7].x+lm[8].x)/2, (lm[7].y+lm[11].y)/2)
             draw_tension_blob(mn, t, (0, 120, 255), "Neck Stress")
-        elif part == 'erector_spinae':
+        elif part.startswith('erector_spinae'):
             idx = 23 if '_l' in part else 24
             draw_tension_blob(lm[idx], t, (0, 80, 220), "Back Stress")
+        elif part == 'lumbar_extensor':
+            # 腰部 (L3付近)
+            draw_tension_blob(lm[23], t, (0, 80, 220), "Lumbar Stress")
+        elif part == 'quads':
+            # 大腿部
+            class ThighPoint:
+                def __init__(self, x, y):
+                    self.x = x
+                    self.y = y
+                    self.visibility = 1.0
+            mt = ThighPoint((lm[23].x + lm[25].x) / 2, (lm[23].y + lm[25].y) / 2)
+            draw_tension_blob(mt, t, (0, 50, 200), "Thigh Tension")
 
     cv2.addWeighted(overlay, 0.4, img, 0.6, 0, img)
 
