@@ -569,11 +569,17 @@ def _calc_total_score(items, risks):
     P_LEVELS = [0.0, 1.5, 6.0, 12.0]
     
     for it in items:
-        name, val = it.get("name", ""), abs(it.get("diff", 0))
+        name = it.get("name", "")
+        raw_val = it.get("diff", 0)
+        
         # 文字列が含まれる場合は数値に変換（側面用対応）
-        if isinstance(val, str):
-            try: val = float(val.replace('%','').replace('°',''))
+        if isinstance(raw_val, str):
+            try: val = float(raw_val.replace('%','').replace('°','').replace('+',''))
             except: val = 0.0
+        else:
+            val = float(raw_val)
+            
+        val = abs(val)
             
         # 対応するしきい値を取得
         th = None
