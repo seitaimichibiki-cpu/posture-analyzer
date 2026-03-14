@@ -591,11 +591,28 @@ def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
     ih = img.shape[0]
     for y in range(max(py_top, 10), min(py_bot, ih), 20):
         cv2.line(img, (lx, y), (lx, min(y+10, py_bot)), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
+    
+    # 現実に即してランドマーク中点を計算
+    pts = [
+        midpoint(px_zoom(lm[7],w,h,x1,y1,scale),  px_zoom(lm[8],w,h,x1,y1,scale)),
+        midpoint(px_zoom(lm[11],w,h,x1,y1,scale), px_zoom(lm[12],w,h,x1,y1,scale)),
+        midpoint(px_zoom(lm[23],w,h,x1,y1,scale), px_zoom(lm[24],w,h,x1,y1,scale)),
+        (lx, int((max(lm[27].y, lm[28].y)*h - y1)*scale))
+    ]
+    for pt in pts:
+        cv2.circle(img, pt, 6, MIDLINE_COL_BGR, -1)
         cv2.circle(img, pt, 8, (255, 255, 255), 1)
         if pt[0] != lx:
             cv2.arrowedLine(img, (lx, pt[1]), (pt[0], pt[1]), MIDLINE_COL_BGR, 2, cv2.LINE_AA, tipLength=0.2)
+    return pts
 
-def calc_body_risks(sc_h, sc_s, sc_p, ts_sc, s_a, p_a):
+def _calc_total_score(scores):
+    """一律の減点方式による総合点算出"""
+    deduction = 0
+    mapping = {"◎": 0, "○": 2, "△": 8, "×": 15}
+    for s in scores:
+        deduction += mapping.get(s, 5)
+    return max(0, 100 - deduction)
     pd = "右側" if p_a >= 0 else "左側"; sd = "右肩" if s_a >= 0 else "左肩"
     risks = []
     if sc_p == "×" or ts_sc == "×": risks.append(("足", "△", f"骨盤の傾きで左右バランスが崩れています。{pd}への負担が大きい状態です。"))
