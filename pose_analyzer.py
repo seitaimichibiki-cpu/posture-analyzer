@@ -124,7 +124,7 @@ class PoseAnalyzer:
         gc.collect()
         return res
 
-    def analyze_comparison(self, img_path1, img_path2, output_path, view_type='auto'):
+    def analyze_comparison(self, img_path1, img_path2, output_path, muscle_output_path, view_type='auto'):
         """2枚の画像を比較解析する"""
         import gc
         img1_orig, img2_orig = cv2.imread(img_path1), cv2.imread(img_path2)
@@ -152,16 +152,18 @@ class PoseAnalyzer:
 
         # 個別解析と描画済みイメージの取得
         if view == 'front':
-            res_img1, items1, risks1 = self._process_front_for_comp(i1, lm1)
-            res_img2, items2, risks2 = self._process_front_for_comp(i2, lm2)
+            p_img1, m_img1, items1, risks1 = self._process_front_for_comp(i1, lm1)
+            p_img2, m_img2, items2, risks2 = self._process_front_for_comp(i2, lm2)
             panel = build_comparison_panel(items1, items2, risks2, 560, 1400, "正面")
         else:
-            res_img1, items1, risks1 = self._process_side_for_comp(i1, lm1)
-            res_img2, items2, risks2 = self._process_side_for_comp(i2, lm2)
+            p_img1, m_img1, items1, risks1 = self._process_side_for_comp(i1, lm1)
+            p_img2, m_img2, items2, risks2 = self._process_side_for_comp(i2, lm2)
             panel = build_comparison_panel(items1, items2, risks2, 560, 1400, "側面")
 
         # レポート合成 [Before][After][Panel]
-        success = self._save_comparison_report(res_img1, res_img2, panel, output_path, f"比較（{view}）")
+        s1 = self._save_comparison_report(p_img1, p_img2, panel, output_path, f"比較（{view}）")
+        s2 = self._save_comparison_report(m_img1, m_img2, panel, muscle_output_path, f"筋肉比較（{view}）")
+        success = s1 and s2
 
         # 数値データを辞書で返す
         data = {
@@ -189,17 +191,25 @@ class PoseAnalyzer:
         target_ph = 1400; scale = target_ph / img_c.shape[0]
         img_f = cv2.resize(img_c, (int(img_c.shape[1]*scale), target_ph), interpolation=cv2.INTER_CUBIC)
         
-        draw_skeleton_zoom(img_f, lm, w, h, x1, y1, scale)
-        draw_meas_line_zoom(img_f, lm[11], lm[12], sc_s, w, h, x1, y1, scale)
-        draw_meas_line_zoom(img_f, lm[23], lm[24], sc_p, w, h, x1, y1, scale)
-        draw_midline_zoom(img_f, lm, w, h, x1, y1, scale)
+        # 姿勢図
+        p_img = img_f.copy()
+        draw_skeleton_zoom(p_img, lm, w, h, x1, y1, scale)
+        draw_meas_line_zoom(p_img, lm[11], lm[12], sc_s, w, h, x1, y1, scale)
+        draw_meas_line_zoom(p_img, lm[23], lm[24], sc_p, w, h, x1, y1, scale)
+        draw_midline_zoom(p_img, lm, w, h, x1, y1, scale)
+
+        # 筋肉図
+        m_img = img_f.copy()
+        tensions = estimate_muscle_tension(lm, 'front')
+        draw_muscle_heatmap(m_img, lm, tensions, w, h, x1, y1, scale)
+        draw_cog_indicator(m_img, lm, w, h, x1, y1, scale, 'front')
 
         items = [
             {"n":"頭部傾き","v":head_a,"s":sc_h}, {"n":"肩傾き","v":shldr_a,"s":sc_s}, {"n":"骨盤傾き","v":pelvis_a,"s":sc_p},
             {"n":"頭部ズレ","v":e_pct,"s":ts_sc}, {"n":"肩部ズレ","v":s_pct,"s":ts_sc}, {"n":"骨盤ズレ","v":p_pct,"s":ts_sc}
         ]
         risks = calc_body_risks(sc_h, sc_s, sc_p, ts_sc, shldr_a, pelvis_a)
-        return img_f, items, risks
+        return p_img, m_img, items, risks
 
     def _process_side_for_comp(self, img, lm):
         """比較用の側面描画（内部処理）"""
@@ -217,17 +227,25 @@ class PoseAnalyzer:
         x1, y1, x2, y2 = self._get_crop_box(lm, w, h); img_c = img[y1:y2, x1:x2]
         target_ph = 1400; scale = target_ph / img_c.shape[0]; img_f = cv2.resize(img_c, (int(img_c.shape[1]*scale), target_ph), interpolation=cv2.INTER_CUBIC)
         
-        draw_skeleton_zoom(img_f, lm, w, h, x1, y1, scale)
+        # 姿勢図
+        p_img = img_f.copy()
+        draw_skeleton_zoom(p_img, lm, w, h, x1, y1, scale)
         ax = px_zoom(ankle,w,h,x1,y1,scale); ex_p = (int((ear_px_o[0]-x1)*scale), int((ear_px_o[1]-y1)*scale))
         sx = px_zoom(shldr,w,h,x1,y1,scale); hx = px_zoom(hip,w,h,x1,y1,scale)
-        for yy in range(max(ex_p[1]-50,20), ax[1], 25): cv2.line(img_f, (ax[0],yy), (ax[0],min(yy+12,ax[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
+        for yy in range(max(ex_p[1]-50,20), ax[1], 25): cv2.line(p_img, (ax[0],yy), (ax[0],min(yy+12,ax[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
         pts = [ex_p, sx, hx, ax]
-        for i in range(len(pts)-1): cv2.line(img_f, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
-        for p in pts: cv2.circle(img_f, p, 7, (200,200,50), -1)
+        for i in range(len(pts)-1): cv2.line(p_img, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
+        for p in pts: cv2.circle(p_img, p, 7, (200,200,50), -1)
+
+        # 筋肉図
+        m_img = img_f.copy()
+        tensions = estimate_muscle_tension(lm, 'side')
+        draw_muscle_heatmap(m_img, lm, tensions, w, h, x1, y1, scale)
+        draw_cog_indicator(m_img, lm, w, h, x1, y1, scale, 'side')
 
         items = [{"n":"FHP","v":f_p,"s":f_s}, {"n":"ラウンド肩","v":r_p,"s":r_s}, {"n":"骨盤前後傾","v":p_a,"s":p_s}, {"n":"体幹領域","v":t_p,"s":t_s}]
         risks = calc_side_risks(f_s,r_s,t_s,p_s,abs(f_p),abs(r_p))
-        return img_f, items, risks
+        return p_img, m_img, items, risks
 
     def _save_comparison_report(self, img1, img2, panel, output_path, title):
         # [Before][After][Panel]

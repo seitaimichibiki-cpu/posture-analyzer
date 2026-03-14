@@ -264,12 +264,17 @@
                     response = await fetch('/analyze', { method: 'POST', body: formData });
                 }
 
-                const data = await response.json();
-                if (response.status === 403) {
-                    alert(data.error);
-                    location.href = '/support';
-                    return;
+                if (!response.ok) {
+                    const data = await response.json();
+                    if (response.status === 403) {
+                        alert(data.error);
+                        location.href = '/support';
+                        return;
+                    }
+                    throw new Error(data.error || 'Server error');
                 }
+
+                const data = await response.json();
                 handleResult(data);
             } catch (err) {
                 alert('解析に失敗しました。');

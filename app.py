@@ -1108,11 +1108,12 @@ def compare():
     path_b = os.path.join(UPLOAD_FOLDER, f"comp_b_{uid}{ext_b}")
     path_a = os.path.join(UPLOAD_FOLDER, f"comp_a_{uid}{ext_a}")
     output_path = os.path.join(UPLOAD_FOLDER, f"report_comp_{uid}.jpg")
+    muscle_output_path = os.path.join(UPLOAD_FOLDER, f"muscle_comp_{uid}.jpg")
     
     file_b.save(path_b); file_a.save(path_a)
 
     try:
-        res = get_analyzer().analyze_comparison(path_b, path_a, output_path, view_type=view_type)
+        res = get_analyzer().analyze_comparison(path_b, path_a, output_path, muscle_output_path, view_type=view_type)
         if res and res.get('success'):
             data = res.get('data', {})
             view = data.get('view', view_type)
@@ -1121,10 +1122,9 @@ def compare():
             log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type='compare')
             db.session.add(log)
             
-            # 数値データの保存（BeforeとAfter両方保存する例）
+            # 数値データの保存
             def save_comp_data(items, prefix_type):
                 # items is a list of {"n": name, "v": value, "s": score}
-                # mapping to columns
                 d = {it['n']: it['v'] for it in items}
                 # Cloudinaryへのアップロード
                 c_url = upload_to_cloudinary(output_path)
@@ -1144,15 +1144,11 @@ def compare():
                     pelvis_shift_pct=d.get('骨盤ズレ'),
                     fhp_pct=d.get('FHP'),
                     rs_pct=d.get('ラウンド肩'),
-                    # side_pelvis_angle は pelvis_angle と共通化
                     trunk_pct=d.get('体幹領域') or d.get('体幹ライン'),
                     image_filename=c_url if c_url else os.path.basename(output_path),
                     input_filename=i_url if i_url else (os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a))
                 )
-                
-                # アドバイス
                 record.advice = generate_advice(record)
-                
                 db.session.add(record)
 
             try:
@@ -1161,24 +1157,24 @@ def compare():
             except Exception as e:
                 print(f"Failed to save comparison numerical data: {e}")
 
-            # 個別画像のアップロード
-            before_cloud_url = upload_to_cloudinary(output_path.replace(".jpg", "_before.jpg"))
-            after_cloud_url = upload_to_cloudinary(output_path.replace(".jpg", "_after.jpg"))
+            # レポート画像のアップロード
+            report_cloud_url = upload_to_cloudinary(output_path)
+            muscle_cloud_url = upload_to_cloudinary(muscle_output_path)
 
             db.session.commit()
 
-            # フォールバック: Cloudinaryが使えない場合はローカルURLを返す
-            if not before_cloud_url:
-                before_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path).replace(".jpg", "_before.jpg")}')
-            if not after_cloud_url:
-                after_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path).replace(".jpg", "_after.jpg")}')
+            # フォールバック
+            if not report_cloud_url:
+                report_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path)}')
+            if not muscle_cloud_url:
+                muscle_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(muscle_output_path)}')
 
             return jsonify({
                 'success': True,
-                'report_url': url_for('static', filename=f'uploads/report_comp_{uid}.jpg'),
-                'before_url': before_cloud_url,
-                'after_url': after_cloud_url,
-                'advice': "比較解析を行いました。以前の状態（左）と今回の状態（右）の変化を確認してください。"
+                'report_url': report_cloud_url,
+                'muscle_report_url': muscle_cloud_url,
+                'view_type': view,
+                'advice': "比較解析を行いました。タブを切り替えて「姿勢」と「筋肉」の変化を確認してください。"
             })
         else:
             return jsonify({'success': False, 'error': '人物の検出に失敗しました。'}), 200
