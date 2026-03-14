@@ -697,17 +697,35 @@ def draw_cog_indicator(img, lm, w, h, x1, y1, scale, view):
         cog_x = max(p_base[0]-bar_w//2, min(p_base[0]+bar_w//2, cog_x))
         cv2.circle(img, (cog_x, py+4), 6, (0, 255, 255), -1)
         
-        # パーセント表示
+        # パーセント表示 (見認性向上のために太字・赤色・縁取りを追加)
         left_p = 50 - (shift * 50)
         right_p = 100 - left_p
-        cv2.putText(img, f"L:{left_p:.0f}%", (p_base[0]-bar_w//2-50, py+10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200,200,200), 1)
-        cv2.putText(img, f"R:{right_p:.0f}%", (p_base[0]+bar_w//2+10, py+10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200,200,200), 1)
-        cv2.putText(img, "LOAD BALANCE", (p_base[0]-40, py+24), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (150,150,150), 1)
+        
+        def put_text_bold(text, pos, color, scale=0.6, thickness=2):
+            # 縁取り（黒）
+            cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (10, 10, 10), thickness + 2, cv2.LINE_AA)
+            # 本体
+            cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
+
+        # 荷重が大きい方を強調（赤系、小さい方は白系）
+        col_l = (80, 80, 255) if left_p > 55 else (240, 240, 240)
+        col_r = (80, 80, 255) if right_p > 55 else (240, 240, 240)
+        
+        put_text_bold(f"L:{left_p:.0f}%", (p_base[0]-bar_w//2-75, py+15), col_l)
+        put_text_bold(f"R:{right_p:.0f}%", (p_base[0]+bar_w//2+15, py+15), col_r)
+        
+        # 中央ラベル
+        put_text_bold("LOAD BALANCE", (p_base[0]-65, py+38), (80, 220, 240), 0.45, 1)
     else:
         # 重心フラグ（側面）
         direction = "FORWARD" if shift > 0.1 else "BACKWARD" if shift < -0.1 else "IDEAL"
-        color = (0, 255, 255) if direction != "IDEAL" else (80, 220, 140)
-        cv2.putText(img, f"COG: {direction}", (p_base[0]-40, py+10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+        color = (80, 80, 255) if direction != "IDEAL" else (80, 220, 140)
+        
+        def put_text_bold_side(text, pos, color, scale=0.6, thickness=2):
+            cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (10, 10, 10), thickness + 2, cv2.LINE_AA)
+            cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
+            
+        put_text_bold_side(f"COG: {direction}", (p_base[0]-60, py+15), color)
 
 def build_side_panel(items, risks, pw, ih):
     ph = max(_measure_side_panel_height(items, risks), ih)
