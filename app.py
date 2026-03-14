@@ -151,6 +151,23 @@ def init_and_migrate():
                 if 'advice' not in record_cols:
                     conn.execute(text('ALTER TABLE analysis_record ADD COLUMN advice TEXT'))
                 
+                # 数値データカラムの追加 (Phase 26)
+                numerical_cols = {
+                    'shoulder_angle': 'FLOAT',
+                    'pelvis_angle': 'FLOAT',
+                    'head_angle': 'FLOAT',
+                    'ear_shift_pct': 'FLOAT',
+                    'shoulder_shift_pct': 'FLOAT',
+                    'pelvis_shift_pct': 'FLOAT',
+                    'fhp_pct': 'FLOAT',
+                    'rs_pct': 'FLOAT',
+                    'side_pelvis_angle': 'FLOAT',
+                    'trunk_pct': 'FLOAT'
+                }
+                for col, col_type in numerical_cols.items():
+                    if col not in record_cols:
+                        conn.execute(text(f'ALTER TABLE analysis_record ADD COLUMN {col} {col_type}'))
+                
                 conn.commit()
 
             # --- LineUserMappingテーブルの確認 ---

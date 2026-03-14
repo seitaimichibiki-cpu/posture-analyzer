@@ -404,7 +404,7 @@ class PoseAnalyzer:
         draw_h_diff_zoom(ear_px, shldr_px, fhp_sc)
 
         # 4. ラベル描画（はみ出し防止）
-        pil_p = cv2pil(img_final); dp = ImageDraw.Draw(pil_p); fl = get_font(20)
+        pil_p = cv2pil(img_pose); dp = ImageDraw.Draw(pil_p); fl = get_font(20)
         def s_lbl_zoom(pt, txt, sc, dy=-25):
             col = SCORE_RGB[sc]; tx, ty = pt[0]+12, pt[1]+dy
             bb = dp.textbbox((0,0),txt,font=fl); tw = bb[2]-bb[0]
