@@ -265,18 +265,9 @@
                 
                 // 比較スライダーの処理 (Phase 20)
                 console.log('viewMode:', viewMode);
-                console.log('before_url:', data.before_url);
-                console.log('after_url:', data.after_url);
-
-                if (viewMode === 'compare' && data.before_url && data.after_url) {
-                    showComparisonSlider(data.before_url, data.after_url);
-                } else {
-                    document.getElementById('comparisonSliderArea')?.remove();
-                    document.getElementById('sliderTitle')?.remove();
-                    document.getElementById('reportTitle')?.remove();
-                    const wrapper = document.querySelector('.report-wrapper');
-                    if (wrapper) wrapper.style.display = 'block';
-                }
+                // 常にレポート画像を表示
+                const wrapper = document.querySelector('.report-wrapper');
+                if (wrapper) wrapper.style.display = 'block';
 
                 if (data.advice) {
                     document.getElementById('adviceText').textContent = data.advice;
@@ -289,63 +280,6 @@
             }
         }
 
-        function showComparisonSlider(beforeUrl, afterUrl) {
-            // 既存のスライダーがあれば削除
-            document.getElementById('comparisonSliderArea')?.remove();
-            document.getElementById('sliderTitle')?.remove();
-            document.getElementById('reportTitle')?.remove();
-            
-            const area = document.createElement('div');
-            area.id = 'comparisonSliderArea';
-            area.className = 'comparison-slider';
-            area.innerHTML = `
-                <div class="comp-badge badge-after">AFTER (今回)</div>
-                <img class="after-img" src="${afterUrl}" alt="After">
-                <div class="before-img" id="sliderBeforeImg">
-                    <div class="comp-badge badge-before">BEFORE (以前)</div>
-                    <img src="${beforeUrl}" alt="Before">
-                </div>
-                <div class="slider-handle" id="sliderHandle"></div>
-                <input type="range" min="0" max="100" value="50" class="slider-input" id="sliderInput">
-            `;
-            
-            const wrapper = document.querySelector('.report-wrapper');
-            if (wrapper && wrapper.parentNode) {
-                console.log('Showing slider AND report wrapper');
-                // スライダー専用の見出しを追加
-                const sliderTitle = document.createElement('h3');
-                sliderTitle.id = 'sliderTitle';
-                sliderTitle.style = 'font-size: 16px; margin: 25px 0 15px; color: var(--accent); display: flex; align-items: center; gap: 8px;';
-                sliderTitle.innerHTML = '<span>↔️</span> インタラクティブ比較スライダー';
-                
-                wrapper.parentNode.insertBefore(sliderTitle, wrapper);
-                wrapper.parentNode.insertBefore(area, wrapper);
-                
-                // 従来の横並び画像の見出しを調整（あれば）
-                const reportTitle = document.createElement('h3');
-                reportTitle.id = 'reportTitle';
-                reportTitle.style = 'font-size: 16px; margin: 35px 0 15px; color: var(--success); display: flex; align-items: center; gap: 8px;';
-                reportTitle.innerHTML = '<span>📋</span> 比較解析レポート（詳細版）';
-                wrapper.parentNode.insertBefore(reportTitle, wrapper);
-            }
- else {
-                console.error('Could not find .report-wrapper or its parent node');
-            }
-
-            const input = document.getElementById('sliderInput');
-            const beforeImg = document.getElementById('sliderBeforeImg');
-            const handle = document.getElementById('sliderHandle');
-
-            input.oninput = (e) => {
-                const val = e.target.value;
-                beforeImg.style.width = `${val}%`;
-                handle.style.left = `${val}%`;
-            };
-
-            // 初期位置
-            beforeImg.style.width = `50%`;
-            handle.style.left = `50%`;
-        }
 
         function resizeImage(file, maxSide) {
             return new Promise((resolve) => {
