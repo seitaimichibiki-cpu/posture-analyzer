@@ -647,27 +647,6 @@ def calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, fval, rval):
     else: risks.append(("腰・骨盤", "◎", "骨盤バランスは良好です。"))
     if trk_sc == "×": risks.append(("全身", "×", "重心ラインが大きくずれ、全身が疲れやすい姿勢です。"))
     else: risks.append(("全身", "◎", "全身の垂直バランスは良好です。"))
-    return risks
-
-def _calc_risk_row_h(msg): return 38 if len(msg) > MAX_CHARS else 24
-MAX_CHARS = 28
-def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
-def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
-
-def calc_future_risks(scores):
-    """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
-    # ◎=0, ○=1, △=3, ×=6 (重心値)
-    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
-    total_val = sum(weights.get(s, 0) for s in scores)
-    max_val = len(scores) * 6
-    if max_val == 0: return {}
-    
-    base_risk = (total_val / max_val) * 100
-    
-    # 部位別の重み付け (バイオメカニクス的推論)
-    # 首(FHP)が悪いと自律神経、巻き肩・猫背だと血流・内臓、骨盤だと慢性痛
-    risks = [
-        {"name": "血流・代謝不全", "val": min(base_risk * 1.1 + 10, 99), "desc": "筋ポンプ作用低下による冷え、むくみの定着"},
         {"name": "自律神経の乱れ", "val": min(base_risk * 0.9 + 5, 99), "desc": "頸椎負荷による不眠・頭痛等の不調リスク"},
         {"name": "内臓圧迫・消化器", "val": min(base_risk * 0.8 + 5, 99), "desc": "前傾姿勢による腹部圧迫と活動効率低下"},
         {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"}
