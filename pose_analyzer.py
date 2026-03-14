@@ -378,14 +378,15 @@ class PoseAnalyzer:
             cv2.line(img_final, (ankle_px[0], yy), (ankle_px[0], min(yy+12, ankle_px[1])), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
         
         pts = [ear_px, shldr_px, hip_px, ankle_px]
-        for i in range(len(pts)-1): cv2.line(img_final, pts[i], pts[i+1], (200,200,50), 2, cv2.LINE_AA)
-        for pt in pts: cv2.circle(img_final, pt, 7, (200,200,50), -1)
+        for i in range(len(pts)-1): draw_neon_line(img_final, pts[i], pts[i+1], (200, 200, 50), 2)
+        for pt in pts: draw_neon_circle(img_final, pt, 7, (200, 200, 50))
 
         # 水平偏差矢印
         def draw_h_diff_zoom(p_a, p_b, sc):
             col = SCORE_BGR[sc]; my = (p_a[1]+p_b[1])//2
             cv2.arrowedLine(img_final, (p_b[0],my), (p_a[0],my), col, 2, cv2.LINE_AA, tipLength=0.2)
-            cv2.circle(img_final, p_a, 7, col, -1); cv2.circle(img_final, p_b, 7, col, -1)
+            draw_neon_circle(img_final, p_a, 7, col)
+            draw_neon_circle(img_final, p_b, 7, col)
         draw_h_diff_zoom(ear_px, shldr_px, fhp_sc)
 
         # 4. ラベル描画（はみ出し防止）
@@ -499,22 +500,39 @@ def px_zoom(lm, w, h, x1, y1, scale):
     """ズーム・クロップ後の座標に変換する"""
     return (int((lm.x * w - x1) * scale), int((lm.y * h - y1) * scale))
 
+def draw_neon_line(img, p1, p2, color, thickness=2):
+    """ネオングロー効果を持つ線を描画する"""
+    # 外側の光（太くて薄い）
+    for i in range(3, 0, -1):
+        alpha_thickness = thickness + i * 4
+        # OpenCVのlineは画像を直接書き換えるため、重なりで光を表現
+        cv2.line(img, p1, p2, color, alpha_thickness, cv2.LINE_AA)
+    # 中心の芯（白または明るい色）
+    cv2.line(img, p1, p2, (255, 255, 255), max(1, thickness-1), cv2.LINE_AA)
+
+def draw_neon_circle(img, pt, radius, color):
+    """ネオングロー効果を持つ円（ポイント）を描画する"""
+    for i in range(3, 0, -1):
+        cv2.circle(img, pt, radius + i * 3, color, -1, cv2.LINE_AA)
+    cv2.circle(img, pt, radius, (255, 255, 255), -1, cv2.LINE_AA)
+
 def draw_skeleton_zoom(img, lm, w, h, x1, y1, scale):
     for s, e in CONNECTIONS:
         if lm[s].visibility > 0.3 and lm[e].visibility > 0.3:
             p1 = px_zoom(lm[s], w, h, x1, y1, scale)
             p2 = px_zoom(lm[e], w, h, x1, y1, scale)
-            cv2.line(img, p1, p2, (150,150,150), 1, cv2.LINE_AA)
+            draw_neon_line(img, p1, p2, (120, 120, 120), 1)
     for l in lm:
-        cv2.circle(img, px_zoom(l, w, h, x1, y1, scale), 3, (80,230,120), -1)
+        if l.visibility > 0.3:
+            draw_neon_circle(img, px_zoom(l, w, h, x1, y1, scale), 3, (80, 230, 120))
 
 def draw_meas_line_zoom(img, lm1, lm2, sc, w, h, x1, y1, scale):
     c = SCORE_BGR[sc]
     p1 = px_zoom(lm1, w, h, x1, y1, scale)
     p2 = px_zoom(lm2, w, h, x1, y1, scale)
-    # 線を細く（2px）に変更して精密感を出す
-    cv2.line(img, p1, p2, c, 2, cv2.LINE_AA)
-    cv2.circle(img, p1, 6, c, -1); cv2.circle(img, p2, 6, c, -1)
+    draw_neon_line(img, p1, p2, c, 3)
+    draw_neon_circle(img, p1, 6, c)
+    draw_neon_circle(img, p2, 6, c)
 
 def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
     lx_orig = (lm[27].x + lm[28].x) / 2 * w

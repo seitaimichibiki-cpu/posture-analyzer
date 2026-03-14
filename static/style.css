@@ -413,6 +413,59 @@ input:checked + .slider { background-color: var(--accent); }
 input:checked + .slider:before { transform: translateX(16px); }
 .guide-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 
+/* 印刷用最適化（Phase 21） */
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+    .container {
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    header, .view-selector, .view-btn, .actions, footer, .guide-control, 
+    #singleModeArea .actions, .secondary-btn, .comparison-slider .slider-input,
+    .slider-handle::after, #downloadBtn, .primary-btn, .analyze-btn {
+        display: none !important;
+    }
+    .card {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        backdrop-filter: none !important;
+    }
+    .result-section {
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .report-wrapper {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+    }
+    #resultImage {
+        width: 100% !important;
+        max-height: 250mm; /* A4に収める */
+        object-fit: contain;
+    }
+    .result-card {
+        page-break-inside: avoid;
+        border-left: 3px solid #000 !important;
+    }
+    /* 印刷時のヘッダー追加 */
+    .container::before {
+        content: "整体院 導 ｜ AI 姿勢解析診断書";
+        display: block;
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+}
+
 /* 比較スライダー（Phase 20） */
 .comparison-slider {
     position: relative;
