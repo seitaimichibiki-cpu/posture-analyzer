@@ -688,16 +688,34 @@ def calc_body_risks(sc_h, sc_s, sc_p, ts_sc, s_a, p_a):
     else: risks.append(("足", "◎", "体重分配は良好です。"))
     if sc_p == "×" or ts_sc in ("△", "×"): risks.append(("膝", "△", f"{pd}の膝にストレスが偏りやすい状態です。"))
     else: risks.append(("膝", "◎", "膝へのバランスは良好です。"))
-    if sc_p == "×": risks.append(("股関節", "×", f"{pd}の股関節痛のリスクが高い状態です。"))
-    elif sc_p == "△": risks.append(("股関節", "△", "骨盤傾きが股関節への負荷につながっています。"))
-    else: risks.append(("股関節", "◎", "股関節への負荷は左右均等です。"))
-    if sc_p == "×" or ts_sc == "×": risks.append(("腰", "×", "腰椎に強い非対称な負荷がかかっています。"))
-    elif sc_p == "△": risks.append(("腰", "△", f"{pd}の腰への負担が片側に偏っています。"))
-    else: risks.append(("腰", "◎", "腰椎バランスは良好です。"))
-    if sc_s == "×": risks.append(("肩", "×", f"{sd}が大きく下がり、反対側の腱板に負荷がかかっています。"))
-    elif sc_s == "△": risks.append(("肩", "△", "肩こりや腕のだるさが出やすい状態です。"))
-    else: risks.append(("肩", "◎", "肩のバランスは良好です。"))
-    if sc_h == "×": risks.append(("首", "×", "頸椎に偏った負荷がかかり、頭痛やしびれのリスクがあります。"))
+    if sc_p == "×": risks.append(("股関節", "×", f"{pd}の股関節痛のリスクが高いdef calc_future_risks(scores, view='front'):
+    """姿勢スコアの分布から、視点（正面・側面）に応じた将来のリスク予測を算出"""
+    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
+    total_val = sum(weights.get(s, 0) for s in scores)
+    max_val = len(scores) * 6
+    if max_val == 0: base_risk = 0
+    else: base_risk = (total_val / max_val) * 100
+    
+    if view == 'front':
+        # 正面視：左右の歪みに関連
+        risks = [
+            {"name": "側弯・背骨の歪み", "val": min(base_risk * 1.2 + 10, 99), "desc": "左右の重心ズレによる脊椎への不均等なストレス"},
+            {"name": "肩凝り・片頭痛", "val": min(base_risk * 1.1 + 5, 99), "desc": "肩ラインの不均衡による頸部筋肉への持続的緊張"},
+            {"name": "骨盤変形・下肢症状", "val": min(base_risk * 1.0 + 8, 99), "desc": "骨盤の傾きが膝や足首の関節に及ぼす影響"},
+            {"name": "内臓位置の不均衡", "val": min(base_risk * 0.8 + 5, 99), "desc": "体幹の傾きによる腹部空間の圧縮と血流低下"},
+            {"name": "自立神経・不眠", "val": min(base_risk * 0.9 + 12, 99), "desc": "首の横倒れによる自律神経への影響と疲労蓄積"}
+        ]
+    else:
+        # 側面視：前後の歪みに関連
+        risks = [
+            {"name": "猫背・円背の定着", "val": min(base_risk * 1.1 + 10, 99), "desc": "前傾姿勢の継続による背中の曲がりの固定化"},
+            {"name": "ストレートネック", "val": min(base_risk * 1.3 + 8, 99), "desc": "前方頭位による頸部への負担と脳血流への影響"},
+            {"name": "反り腰・慢性腰痛", "val": min(base_risk * 1.2 + 12, 99), "desc": "骨盤の前傾による腰椎骨への持続的な摩耗"},
+            {"name": "呼吸機能の低下", "val": min(base_risk * 0.9 + 5, 99), "desc": "巻き肩による胸郭の閉鎖と呼吸の質の低下"},
+            {"name": "脊椎の変性", "val": min(base_risk * 1.0 + 15, 99), "desc": "重力による特定椎間板への集中荷重と骨棘形成"}
+        ]
+    return risks
+("首", "×", "頸椎に偏った負荷がかかり、頭痛やしびれのリスクがあります。"))
     elif sc_h == "△": risks.append(("首", "△", "首の筋肉に左右差が生じやすく、疲れやすい状態です。"))
     else: risks.append(("首", "◎", "首への負荷は左右均等です。"))
     return risks
@@ -766,31 +784,39 @@ def _draw_legend_block(draw, x, y, view):
 def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 750, 1600)
 def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 750, 1600)
 
-def calc_future_risks(scores):
-    """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
-    # ◎=0, ○=1, △=3, ×=6 (重心値)
+def calc_future_risks(scores, view='front'):
+    """姿勢スコアの分布から、視点（正面・側面）に応じた将来のリスク予測を算出"""
     weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
     total_val = sum(weights.get(s, 0) for s in scores)
     max_val = len(scores) * 6
     if max_val == 0: base_risk = 0
     else: base_risk = (total_val / max_val) * 100
     
-    # 部位別の重み付け (バイオメカニクス的推論)
-    # 首(FHP)が悪いと自律神経、巻き肩・猫背だと血流・内臓、骨盤だと慢性痛
-    risks = [
-        {"name": "血流・代謝不全", "val": min(base_risk * 1.1 + 10, 99), "desc": "筋ポンプ作用低下による冷え、むくみの定着"},
-        {"name": "自律神経の乱れ", "val": min(base_risk * 0.9 + 5, 99), "desc": "頸椎負荷による不眠・頭痛等の不調リスク"},
-        {"name": "内臓圧迫・消化器", "val": min(base_risk * 0.8 + 5, 99), "desc": "前傾姿勢による腹部圧迫と活動効率低下"},
-        {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"},
-        {"name": "脊椎の変性", "val": min(base_risk * 1.0 + 12, 99), "desc": "持続的な負荷による骨棘発生・椎間板変性"}
-    ]
+    if view == 'front':
+        # 正面視：左右の歪みに関連
+        risks = [
+            {"name": "側弯・背骨の歪み", "val": min(base_risk * 1.2 + 10, 99), "desc": "左右の重心ズレによる脊椎への不均等なストレス"},
+            {"name": "肩凝り・片頭痛", "val": min(base_risk * 1.1 + 5, 99), "desc": "肩ラインの不均衡による頸部筋肉への持続的緊張"},
+            {"name": "骨盤変形・下肢症状", "val": min(base_risk * 1.0 + 8, 99), "desc": "骨盤の傾きが膝や足首の関節に及ぼす影響"},
+            {"name": "内臓位置の不均衡", "val": min(base_risk * 0.8 + 5, 99), "desc": "体幹の傾きによる腹部空間の圧縮と血流低下"},
+            {"name": "自立神経・不眠", "val": min(base_risk * 0.9 + 12, 99), "desc": "首の横倒れによる自律神経への影響と疲労蓄積"}
+        ]
+    else:
+        # 側面視：前後の歪みに関連
+        risks = [
+            {"name": "猫背・円背の定着", "val": min(base_risk * 1.1 + 10, 99), "desc": "前傾姿勢の継続による背中の曲がりの固定化"},
+            {"name": "ストレートネック", "val": min(base_risk * 1.3 + 8, 99), "desc": "前方頭位による頸部への負担と脳血流への影響"},
+            {"name": "反り腰・慢性腰痛", "val": min(base_risk * 1.2 + 12, 99), "desc": "骨盤の前傾による腰椎骨への持続的な摩耗"},
+            {"name": "呼吸機能の低下", "val": min(base_risk * 0.9 + 5, 99), "desc": "巻き肩による胸郭の閉鎖と呼吸の質の低下"},
+            {"name": "脊椎の変性", "val": min(base_risk * 1.0 + 15, 99), "desc": "重力による特定椎間板への集中荷重と骨棘形成"}
+        ]
     return risks
 
 def build_panel(items, risks, pw, ih):
     # スコアリスト作成
     i_scores = [it["score"] for it in items]
     r_scores = [r[1] for r in risks]
-    f_risks = calc_future_risks(i_scores + r_scores)
+    f_risks = calc_future_risks(i_scores + r_scores, view='front')
     total_pt = _calc_total_score(items, risks)
     
     ph = _measure_panel_height(items, risks)
@@ -997,7 +1023,7 @@ def build_side_panel(items, risks, pw, ih):
     # スコアリスト作成
     i_scores = [it["score"] for it in items]
     r_scores = [r[1] for r in risks]
-    f_risks = calc_future_risks(i_scores + r_scores)
+    f_risks = calc_future_risks(i_scores + r_scores, view='side')
     total_pt = _calc_total_score(items, risks)
 
     ph = _measure_side_panel_height(items, risks)
