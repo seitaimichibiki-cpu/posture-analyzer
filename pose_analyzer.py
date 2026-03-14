@@ -670,7 +670,7 @@ def build_panel(items, risks, pw, ih):
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
     
-    ph = max(_measure_panel_height(items, risks) + 260, ih)
+    ph = max(_measure_panel_height(items, risks) + 380, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, "🩺 AI 姿勢解析レポート（正面観察）", fT, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
@@ -692,17 +692,26 @@ def build_panel(items, risks, pw, ih):
         for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
         y += 40
 
-    # 🆕 生活習慣病予測セクション
-    y += 15; dr.rectangle([(10,y),(pw-10,y+250)], fill=(20,24,40), outline=(255, 80, 80)); y += 10; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(18), (255,100,100)); y += 35
+    # 🆕 生活習慣病予測セクション（改善されたレイアウト）
+    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
     for fr in f_risks:
-        draw_text(dr, (22,y), fr["name"], fS, WHITE)
-        # ゲージ描画
-        dr.rectangle([(120,y+4),(pw-30,y+14)], fill=(40,40,60))
-        gw = int((pw-150) * (fr["val"]/100))
+        # 項目の名称を一行目に配置
+        draw_text(dr, (25,y), fr["name"], fB, WHITE)
+        y += 28
+        
+        # ゲージ描画（二行目：左寄せ）
+        bar_x1, bar_x2 = 25, pw - 85
+        dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
+        gw = int((bar_x2 - bar_x1) * (fr["val"] / 100))
         gcol = (255, 60, 60) if fr["val"] > 60 else (255, 180, 40)
-        dr.rectangle([(120,y+4),(120+gw,y+14)], fill=gcol)
-        draw_text(dr, (pw-25,y+2), f"{fr['val']:.0f}%", fXXS, gcol)
-        y += 18; draw_text(dr, (22,y), f"● {fr['desc']}", fXXS, GRAY); y += 32
+        dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol)
+        # パーセンテージ描画（ゲージの右隣）
+        draw_text(dr, (bar_x2 + 10, y - 4), f"{fr['val']:.0f}%", fS, gcol)
+        y += 22
+        
+        # 三行目：説明文
+        draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY)
+        y += 42 # 次の項目へのマージン
 
     # 凡例・出典
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ スコア基準", fH, WHITE); y += 22
@@ -858,7 +867,7 @@ def build_side_panel(items, risks, pw, ih):
     scores = [it["score"] for it in items] + [r[1] for r in risks]
     f_risks = calc_future_risks(scores)
 
-    ph = max(_measure_side_panel_height(items, risks) + 260, ih)
+    ph = max(_measure_side_panel_height(items, risks) + 380, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, "🩺 AI 姿勢解析レポート（側面観察）", fT, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
@@ -877,16 +886,26 @@ def build_side_panel(items, risks, pw, ih):
         for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
         y += 40
 
-    # 🆕 生活習慣病予測セクション（側面）
-    y += 15; dr.rectangle([(10,y),(pw-10,y+250)], fill=(20,24,40), outline=(255, 80, 80)); y += 10; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(18), (255,100,100)); y += 35
+    # 🆕 生活習慣病予測セクション（側面：改善されたレイアウト）
+    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
     for fr in f_risks:
-        draw_text(dr, (22,y), fr["name"], fS, WHITE)
-        dr.rectangle([(120,y+4),(pw-30,y+14)], fill=(40,40,60))
-        gw = int((pw-150) * (fr["val"]/100))
+        # 項目の名称を一行目に配置
+        draw_text(dr, (25,y), fr["name"], fB, WHITE)
+        y += 28
+        
+        # ゲージ描画（二行目：左寄せ）
+        bar_x1, bar_x2 = 25, pw - 85
+        dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
+        gw = int((bar_x2 - bar_x1) * (fr["val"] / 100))
         gcol = (255, 60, 60) if fr["val"] > 60 else (255, 180, 40)
-        dr.rectangle([(120,y+4),(120+gw,y+14)], fill=gcol)
-        draw_text(dr, (pw-25,y+2), f"{fr['val']:.0f}%", fXXS, gcol)
-        y += 18; draw_text(dr, (22,y), f"● {fr['desc']}", fXXS, GRAY); y += 32
+        dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol)
+        # パーセンテージ描画（ゲージの右隣）
+        draw_text(dr, (bar_x2 + 10, y - 4), f"{fr['val']:.0f}%", fS, gcol)
+        y += 22
+        
+        # 三行目：説明文
+        draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY)
+        y += 42 # 次の項目へのマージン
 
     # 凡例・出典
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ スコア基準", fH, WHITE); y += 22
