@@ -265,9 +265,10 @@ class PoseAnalyzer:
         panel_p = pad_img(panel, max_h, PANEL_BG)
         
         canvas = np.hstack([img1_p, img2_p, panel_p])
-        bar_h = 60; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
+        bar_h = 80; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58)); draw = ImageDraw.Draw(full_p)
-        draw_text_center(draw, fw//2, 10, f"整体院 導 ｜ AI 姿勢比較レポート（{title}）", get_font(34), WHITE)
+        draw_text_center(draw, fw//2, 10, f"整体院 導 ｜ AI 姿勢比較レポート（{title}）", get_font(30), WHITE)
+        draw_text_center(draw, fw//2, 45, "Before / After 姿勢変化分析エンジン", get_font(16), GRAY)
         
         # Before/After のラベル
         w1, w2 = img1.shape[1], img2.shape[1]
@@ -504,11 +505,11 @@ class PoseAnalyzer:
         panel_pad = pad_img(panel, max_h, (24, 29, 48))
         
         canvas = np.hstack([img_pad, panel_pad])
-        bar_h = 52; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
+        bar_h = 75; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58))
         full_d = ImageDraw.Draw(full_p)
-        draw_text_center(full_d, fw//2, 8, f"整体院 導 ｜ AI 姿勢解析レポート（{title_suffix}）", get_font(30), WHITE)
-        draw_text_center(full_d, fw//2, 32, "MediaPipe Pose Estimation + エビデンスベース解析", get_font(17), GRAY)
+        draw_text_center(full_d, fw//2, 8, f"整体院 導 ｜ AI 姿勢解析レポート（{title_suffix}）", get_font(28), WHITE)
+        draw_text_center(full_d, fw//2, 42, "MediaPipe Pose Estimation + エビデンスベース解析", get_font(16), GRAY)
         full_p.paste(cv2pil(canvas), (0, bar_h))
         final = pil2cv2(np.array(full_p))
         cv2.imwrite(output_path, final)
@@ -672,7 +673,7 @@ def build_panel(items, risks, pw, ih):
     
     ph = max(_measure_panel_height(items, risks) + 380, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
-    dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, "🩺 AI 姿勢解析レポート（正面観察）", fT, WHITE)
+    dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
     
     # 既存の計測結果セクション
@@ -693,7 +694,7 @@ def build_panel(items, risks, pw, ih):
         y += 40
 
     # 🆕 生活習慣病予測セクション（改善されたレイアウト）
-    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
+    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "■ 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
     for fr in f_risks:
         # 項目の名称を一行目に配置
         draw_text(dr, (25,y), fr["name"], fB, WHITE)
@@ -869,7 +870,7 @@ def build_side_panel(items, risks, pw, ih):
 
     ph = max(_measure_side_panel_height(items, risks) + 380, ih)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
-    dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, "🩺 AI 姿勢解析レポート（側面観察）", fT, WHITE)
+    dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
     y = 58; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
@@ -887,7 +888,7 @@ def build_side_panel(items, risks, pw, ih):
         y += 40
 
     # 🆕 生活習慣病予測セクション（側面：改善されたレイアウト）
-    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "🏥 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
+    y += 15; dr.rectangle([(10,y),(pw-10,y+360)], fill=(20,24,40), outline=(255, 80, 80)); y += 15; draw_text(dr, (20,y), "■ 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 45
     for fr in f_risks:
         # 項目の名称を一行目に配置
         draw_text(dr, (25,y), fr["name"], fB, WHITE)
