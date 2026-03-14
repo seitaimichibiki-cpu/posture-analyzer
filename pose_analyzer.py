@@ -54,6 +54,7 @@ SCORE_RGB = {
 }
 SCORE_BGR = {k: (v[2], v[1], v[0]) for k, v in SCORE_RGB.items()}
 PANEL_BG, LINE_COL = (24, 29, 48), (55, 65, 100)
+PANEL_BG_BGR = (PANEL_BG[2], PANEL_BG[1], PANEL_BG[0])
 WHITE, GRAY, YELLOW, GREEN_IDEAL = (240, 245, 255), (140, 150, 175), (255, 220, 80), (80, 220, 140)
 MIDLINE_COL_BGR, MIDLINE_COL_RGB = (220, 220, 50), (50, 220, 220)
 
@@ -262,8 +263,8 @@ class PoseAnalyzer:
             res[:ch, :] = im
             return res
 
-        img1_p = pad_img(img1, max_h, (30, 35, 60))
-        img2_p = pad_img(img2, max_h, (30, 35, 60))
+        img1_p = pad_img(img1, max_h, PANEL_BG_BGR)
+        img2_p = pad_img(img2, max_h, PANEL_BG_BGR)
         
         # 比較レポートの左下（img1の下）に凡例を描画
         view = "front" if "正面" in title else "side"
@@ -272,7 +273,7 @@ class PoseAnalyzer:
         _draw_legend_block(draw_p1, 15, h1 + 15, view)
         img1_p = pil2cv2(np.array(pil_p1))
 
-        panel_p = pad_img(panel, max_h, PANEL_BG)
+        panel_p = pad_img(panel, max_h, PANEL_BG_BGR)
         canvas = np.hstack([img1_p, img2_p, panel_p])
         bar_h = 80; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58)); draw = ImageDraw.Draw(full_p)
@@ -511,7 +512,7 @@ class PoseAnalyzer:
             res[:curr_h, :] = im
             return res
             
-        img_pad = pad_img(img, max_h, (30, 35, 60))
+        img_pad = pad_img(img, max_h, PANEL_BG_BGR)
         
         # 左下（画像の下）の空白に凡例を描画
         view = "front" if "正面" in title_suffix else "side"
@@ -520,7 +521,7 @@ class PoseAnalyzer:
         _draw_legend_block(draw_pad, 15, h1 + 15, view)
         img_pad = pil2cv2(np.array(pil_pad))
         
-        panel_pad = pad_img(panel, max_h, (24, 29, 48))
+        panel_pad = pad_img(panel, max_h, PANEL_BG_BGR)
         canvas = np.hstack([img_pad, panel_pad])
         bar_h = 75; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58))
@@ -781,7 +782,9 @@ def calc_future_risks(scores):
         {"name": "血流・代謝不全", "val": min(base_risk * 1.1 + 10, 99), "desc": "筋ポンプ作用低下による冷え、むくみの定着"},
         {"name": "自律神経の乱れ", "val": min(base_risk * 0.9 + 5, 99), "desc": "頸椎負荷による不眠・頭痛等の不調リスク"},
         {"name": "内臓圧迫・消化器", "val": min(base_risk * 0.8 + 5, 99), "desc": "前傾姿勢による腹部圧迫と活動効率低下"},
-        {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"}
+        {"name": "将来的な慢性痛", "val": min(base_risk * 1.3 + 15, 99), "desc": "特定部位への過負荷（ヘルニア・変形性等）"},
+        {"name": "脊椎のエージング", "val": min(base_risk * 1.0 + 12, 99), "desc": "持続的な負荷による骨棘発生・椎間板変性"},
+        {"name": "脳疲労・集中力", "val": min(base_risk * 0.85 + 8, 99), "desc": "脳血流ストレスによる集中力低下と慢性疲労"}
     ]
     return risks
 
@@ -889,7 +892,6 @@ def estimate_muscle_tension(landmarks, view):
         # 大腿部 (Knee alignment)
         quad_s = abs(lm[23].x - lm[25].x) * 50
         tensions['quads'] = min(quad_s * 0.5, 0.8)
-    return tensions
     return tensions
 
 def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
