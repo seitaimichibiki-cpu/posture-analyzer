@@ -804,8 +804,8 @@ def analyze():
                     rs_pct=data.get('rs_pct'),
                     side_pelvis_angle=data.get('pelvis_angle') if res.get('view') == 'side' else None,
                     trunk_pct=data.get('trunk_pct'),
-                    image_filename=cloud_url if cloud_url else f"report_{filename}",
-                    input_filename=input_cloud_url if input_cloud_url else f"input_{filename}"
+                    image_filename=cloud_url if cloud_url else os.path.basename(output_path),
+                    input_filename=input_cloud_url if input_cloud_url else os.path.basename(input_path)
                 )
                 
                 # AIアドバイス生成
@@ -819,7 +819,7 @@ def analyze():
             
             return jsonify({
                 'success': True,
-                'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/report_{filename}'),
+                'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/{os.path.basename(output_path)}'),
                 'advice': record.advice
             })
         else:
