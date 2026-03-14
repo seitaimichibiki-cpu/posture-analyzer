@@ -613,6 +613,8 @@ def _calc_total_score(scores):
     for s in scores:
         deduction += mapping.get(s, 5)
     return max(0, 100 - deduction)
+
+def calc_body_risks(sc_h, sc_s, sc_p, ts_sc, s_a, p_a):
     pd = "右側" if p_a >= 0 else "左側"; sd = "右肩" if s_a >= 0 else "左肩"
     risks = []
     if sc_p == "×" or ts_sc == "×": risks.append(("足", "△", f"骨盤の傾きで左右バランスが崩れています。{pd}への負担が大きい状態です。"))
