@@ -251,8 +251,9 @@ class PoseAnalyzer:
 
     def _save_comparison_report(self, img1, img2, panel, output_path, title):
         # [Before][After][Panel] の高さを揃える
-        h1, h2, hp = img1.shape[0], img2.shape[0], panel.shape[0]
-        max_h = max(h1, h2, hp)
+        h2, w2 = img2.shape[:2]; hp, wp = panel.shape[:2]
+        # 凡例を画像の下に収めるための必要最小高さを確保
+        max_h = max(h1 + 320, h2 + 320, hp)
         
         def pad_img(im, target_h, bg_col):
             ch, cw = im.shape[:2]
@@ -263,8 +264,15 @@ class PoseAnalyzer:
 
         img1_p = pad_img(img1, max_h, (30, 35, 60))
         img2_p = pad_img(img2, max_h, (30, 35, 60))
-        panel_p = pad_img(panel, max_h, PANEL_BG)
         
+        # 比較レポートの左下（img1の下）に凡例を描画
+        view = "front" if "正面" in title else "side"
+        pil_p1 = cv2pil(img1_p)
+        draw_p1 = ImageDraw.Draw(pil_p1)
+        _draw_legend_block(draw_p1, 15, h1 + 15, view)
+        img1_p = pil2cv2(np.array(pil_p1))
+
+        panel_p = pad_img(panel, max_h, PANEL_BG)
         canvas = np.hstack([img1_p, img2_p, panel_p])
         bar_h = 80; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58)); draw = ImageDraw.Draw(full_p)
@@ -492,7 +500,8 @@ class PoseAnalyzer:
         # 描画済みのimgとpanelを連結して保存
         h1, w1 = img.shape[:2]
         h2, w2 = panel.shape[:2]
-        max_h = max(h1, h2)
+        # 凡例(約300px)を画像の下に収めるための必要最小高さを確保
+        max_h = max(h1 + 320, h2)
         
         # 高さを揃える（背景色 PANEL_BG でパディング）
         def pad_img(im, target_h, bg_col):
@@ -503,8 +512,15 @@ class PoseAnalyzer:
             return res
             
         img_pad = pad_img(img, max_h, (30, 35, 60))
-        panel_pad = pad_img(panel, max_h, (24, 29, 48))
         
+        # 左下（画像の下）の空白に凡例を描画
+        view = "front" if "正面" in title_suffix else "side"
+        pil_pad = cv2pil(img_pad)
+        draw_pad = ImageDraw.Draw(pil_pad)
+        _draw_legend_block(draw_pad, 15, h1 + 15, view)
+        img_pad = pil2cv2(np.array(pil_pad))
+        
+        panel_pad = pad_img(panel, max_h, (24, 29, 48))
         canvas = np.hstack([img_pad, panel_pad])
         bar_h = 75; fw, fh = canvas.shape[1], canvas.shape[0] + bar_h
         full_p = Image.new("RGB", (fw, fh), (28, 34, 58))
@@ -701,8 +717,53 @@ def calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, fval, rval):
 
 def _calc_risk_row_h(msg): return 38 if len(msg) > MAX_CHARS else 24
 MAX_CHARS = 28
-def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
-def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 350, 1400)
+def _draw_legend_block(draw, x, y, view):
+    """画像の下に凡例と出典を描画するヘルパー"""
+    fH, fS, fXS, fXXS = get_font(22), get_font(16), get_font(14), get_font(13)
+    draw_text(draw, (x, y), "▌ スコア基準", fH, WHITE); y += 30
+    
+    if view == 'front':
+        leg = [("頭部",[("◎","<1°"),("○","2°"),("△","4°"),("×","4°+")]),
+               ("肩",[("◎","<1°"),("○","2°"),("△","3.5°"),("×","3.5°+")]),
+               ("骨盤",[("◎","<0.5°"),("○","1.5°"),("△","3°"),("×","3°+")]),
+               ("正中線",[("◎","<2%"),("○","4%"),("△","7%"),("×","7%+")])]
+        ox_base = x + 80
+        stride = 105
+    else:
+        leg = [("前方頭位",[("◎","<5%"),("○","10%"),("△","18%"),("×",">18%")]),
+               ("ラウンド肩",[("◎","<4%"),("○","8%"),("△","14%"),("×",">14%")]),
+               ("骨盤前後傾",[("◎","<2°"),("○","5°"),("△","10°"),("×",">10°")]),
+               ("体幹ライン",[("◎","<3%"),("○","6%"),("△","12%"),("×",">12%")])]
+        ox_base = x + 115
+        stride = 100
+        
+    for lb, cr in leg:
+        draw.line([(x, y), (x+540, y)], fill=LINE_COL)
+        y += 6
+        draw_text(draw, (x, y), f"【{lb}】", fXS, GRAY)
+        ox = ox_base
+        for ic, vl in cr:
+            col = SCORE_RGB[ic]
+            draw_text(draw, (ox, y), ic, fXS, col)
+            draw_text(draw, (ox + 20, y), vl, fXXS, col)
+            ox += stride
+        y += 24
+        
+    y += 10
+    draw.line([(x, y), (x+540, y)], fill=LINE_COL)
+    y += 8
+    draw_text(draw, (x, y), "▌ 評価基準の出典", get_font(13), WHITE)
+    y += 18
+    refs = ["・ Kendall et al. (2005)", "・ Magee DJ. (2014)"]
+    if view == 'side': refs.append("・ Griegel-Morris P. (1992)")
+    refs.append("・ 日本リハ会 姿勢評価GL")
+    for r in refs:
+        draw_text(draw, (x, y), r, fXXS, GRAY)
+        y += 15
+    return y
+
+def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 100, 1400)
+def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 100, 1400)
 
 def calc_future_risks(scores):
     """姿勢スコアの分布から、血管・自律神経・内臓・将来の慢性痛リスクを算出"""
@@ -731,7 +792,7 @@ def build_panel(items, risks, pw, ih):
     f_risks = calc_future_risks(i_scores + r_scores)
     total_pt = _calc_total_score(items, risks)
     
-    ph = max(_measure_panel_height(items, risks) + 580, ih)
+    ph = _measure_panel_height(items, risks)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
     
@@ -791,15 +852,6 @@ def build_panel(items, risks, pw, ih):
         draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY)
         y += 42 # 次の項目へのマージン
 
-    # 凡例・出典
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ スコア基準", fH, WHITE); y += 22
-    leg = [("頭部",[("◎","<1°"),("○","2°"),("△","4°"),("×","4°+")]),("肩",[("◎","<1°"),("○","2°"),("△","3.5°"),("×","3.5°+")]),("骨盤",[("◎","<0.5°"),("○","1.5°"),("△","3°"),("×","3°+")]),("正中線",[("◎","<2%"),("○","4%"),("△","7%"),("×","7%+")])]
-    for lb, cr in leg:
-        dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 6; draw_text(dr, (18,y), f"【{lb}】", fXS, GRAY); ox = 18+80
-        for ic, vl in cr: col = SCORE_RGB[ic]; draw_text(dr, (ox,y), ic, fXS, col); draw_text(dr, (ox+20,y), vl, fXXS, col); ox += 105
-        y += 24
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), "▌ 評価基準の出典", get_font(13), WHITE); y += 18
-    for r in ["・ Kendall et al. (2005)", "・ Magee DJ. (2014)", "・ 日本リハ会 姿勢評価GL"]: draw_text(dr, (18,y), r, fXXS, GRAY); y += 15
     return pil2cv2(np.array(p))
 
 # ─── 高度な解析演出 (重心・筋肉) ───────────────────────────────────────────
@@ -947,7 +999,7 @@ def build_side_panel(items, risks, pw, ih):
     f_risks = calc_future_risks(i_scores + r_scores)
     total_pt = _calc_total_score(items, risks)
 
-    ph = max(_measure_side_panel_height(items, risks) + 580, ih)
+    ph = _measure_side_panel_height(items, risks)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
     
@@ -1004,15 +1056,6 @@ def build_side_panel(items, risks, pw, ih):
         draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY)
         y += 42 # 次の項目へのマージン
 
-    # 凡例・出典
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 12; draw_text(dr, (18,y), "▌ スコア基準", fH, WHITE); y += 22
-    leg = [("前方頭位",[("◎","<5%"),("○","10%"),("△","18%"),("×",">18%")]),("ラウンド肩",[("◎","<4%"),("○","8%"),("△","14%"),("×",">14%")]),("骨盤前後傾",[("◎","<2°"),("○","5°"),("△","10°"),("×",">10°")]),("体幹ライン",[("◎","<3%"),("○","6%"),("△","12%"),("×",">12%")])]
-    for lb, cr in leg:
-        dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 6; draw_text(dr, (18,y), f"【{lb}】", fXS, GRAY); ox = 18+115
-        for ic, vl in cr: col = SCORE_RGB[ic]; draw_text(dr, (ox,y), ic, fXS, col); draw_text(dr, (ox+20,y), vl, fXXS, col); ox += 100
-        y += 24
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), "▌ 評価基準の出典", get_font(13), WHITE); y += 18
-    for r in ["・ Kendall et al. (2005)", "・ Magee DJ. (2014)","・ Griegel-Morris P. (1992)", "・ 日本リハ会 姿勢評価GL"]: draw_text(dr, (18,y), r, fXXS, GRAY); y += 15
     return pil2cv2(np.array(p))
 
 def build_comparison_panel(it1, it2, risks, pw, ih, mode):
