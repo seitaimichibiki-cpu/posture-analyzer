@@ -684,14 +684,21 @@ def build_panel(items, risks, pw, ih):
         draw_text(dr, (18,y+36), f"理想: {item['normal']:+.1f}°", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']:+.1f}°", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']:.1f}° ({item['direction']})", fS, col); y += 72
         
     # 既存のリスク予測
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 22
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 25
     for pt, sc, msg in risks:
-        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
+        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8
+        draw_text(dr, (18,y), f"【{pt}】", fS, WHITE)
+        # スコアアイコンの位置調整（右にシフトして重なり防止）と描画品質向上
+        bx = 125
+        dr.ellipse([(bx, y), (bx+22, y+22)], fill=col, outline=(30,30,50), width=1)
+        draw_text(dr, (bx+4, y+2), sc, fXXS, (10,10,10))
+        
         rem = msg; wrp = []
         while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
         if rem: wrp.append(rem)
-        for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
-        y += 40
+        # 本文の位置もアイコンに合わせてシフト
+        for i, t in enumerate(wrp): draw_text(dr, (bx + 40, y + i*16), t, fXXS, col)
+        y += 45
 
     # 🆕 生活習慣病予測セクション（改善されたレイアウト）
     y += 18; dr.rectangle([(10,y),(pw-10,y+450)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
@@ -878,14 +885,21 @@ def build_side_panel(items, risks, pw, ih):
         draw_text(dr, (18,y+8), item["name"], fB, WHITE); bx = pw-50; dr.ellipse([(bx,y+6),(bx+24,y+30)], fill=col); draw_text(dr, (bx+4,y+10), item["score"], fXS, (10,10,10))
         draw_text(dr, (18,y+36), f"理想: {item['ideal']}", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']}", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']}", fS, col); y += 72
         
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 22
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 25
     for pt, sc, msg in risks:
-        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
+        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8
+        draw_text(dr, (18,y), f"【{pt}】", fS, WHITE)
+        # スコアアイコンの位置調整（右にシフトして重なり防止）と描画品質向上
+        bx = 125
+        dr.ellipse([(bx, y), (bx+22, y+22)], fill=col, outline=(30,30,50), width=1)
+        draw_text(dr, (bx+4, y+2), sc, fXXS, (10,10,10))
+        
         rem = msg; wrp = []
         while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
         if len(rem) > 0: wrp.append(rem)
-        for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
-        y += 40
+        # 本文の位置もアイコンに合わせてシフト
+        for i, t in enumerate(wrp): draw_text(dr, (bx + 40, y + i*16), t, fXXS, col)
+        y += 45
 
     # 🆕 生活習慣病予測セクション（側面：改善されたレイアウト）
     y += 18; dr.rectangle([(10,y),(pw-10,y+450)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
