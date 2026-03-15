@@ -284,19 +284,28 @@
                 }
 
                 if (!response.ok) {
-                    const data = await response.json();
+                    let errorDetail = 'サーバーエラーが発生しました。';
+                    try {
+                        const data = await response.json();
+                        errorDetail = data.error || errorDetail;
+                    } catch (e) {
+                        // JSONでない場合 (404, 500等) はテキストとして取得を試みる
+                        const text = await response.text();
+                        errorDetail = `Status: ${response.status}\n${text.substring(0, 100)}...`;
+                    }
                     if (response.status === 403) {
-                        alert(data.error);
+                        alert(`【制限】${errorDetail}`);
                         location.href = '/support';
                         return;
                     }
-                    throw new Error(data.error || 'Server error');
+                    throw new Error(errorDetail);
                 }
 
                 const data = await response.json();
                 handleResult(data);
             } catch (err) {
-                alert('解析に失敗しました。');
+                alert(`解析エラーが発生しました。\n内容: ${err.message}`);
+                console.error('Analysis error:', err);
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
                 stopLoadingMessages();

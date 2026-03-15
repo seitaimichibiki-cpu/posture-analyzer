@@ -492,10 +492,19 @@ class PoseAnalyzer:
         ys = [lm[i].y for i in pts if lm[i].visibility > 0.3]
         if not xs or not ys: return 0, 0, w, h
         min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
-        person_h = max_y - min_y
+        person_h = max(max_y - min_y, 0.1) # 最小高さを保証 (10%)
         m_top, m_bot, m_side = person_h * 0.15, person_h * 0.1, person_h * 0.1
-        return (max(0, int((min_x - m_side) * w)), max(0, int((min_y - m_top) * h)),
-                min(w, int((max_x + m_side) * w)), min(h, int((max_y + m_bot) * h)))
+        
+        x1, y1 = max(0, int((min_x - m_side) * w)), max(0, int((min_y - m_top) * h))
+        x2, y2 = min(w, int((max_x + m_side) * w)), min(h, int((max_y + m_bot) * h))
+        
+        # 範囲が逆転または潰れている場合のガード
+        if x2 - x1 < 10: 
+            x1 = max(0, x1 - 5); x2 = min(w, x2 + 5)
+        if y2 - y1 < 10:
+            y1 = max(0, y1 - 5); y2 = min(w, y2 + 5)
+            
+        return x1, y1, x2, y2
 
     def _save_final_report(self, img, panel, output_path, title_suffix):
         # 描画済みのimgとpanelを連結して保存

@@ -1430,7 +1430,7 @@ def delete_record(record_id):
 
 # ─── 比較解析機能 ────────────────────────────────────────────────────────────
 
-@app.route('/analyze_compare', methods=['POST'])
+@app.route('/compare', methods=['POST'])
 @login_required
 @subscription_required
 @limiter.limit("5 per minute")
