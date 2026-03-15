@@ -131,11 +131,21 @@
                 <div style="margin-top: 15px; text-align: center;">
                     <a href="{{ url_for('forgot_password') }}" style="color: var(--accent); text-decoration: none; font-size: 14px;">パスワードを忘れた場合</a>
                 </div>
-                <div style="margin-top: 25px; text-align: center; font-size: 11px; color: var(--text-muted); line-height: 1.5;">
-                    ログインすることで、<br>
-                    <a href="{{ url_for('terms') }}" style="color: var(--accent); text-decoration: none;">利用規約</a> および 
-                    <a href="{{ url_for('privacy') }}" style="color: var(--accent); text-decoration: none;">プライバシーポリシー</a><br>
-                    に同意したものとみなされます。
+            </form>
+
+            <form id="otpForm" style="display: none;">
+                <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 20px;">
+                    ご登録のメールアドレスに認証コードを送信しました。
+                </p>
+                <div class="form-group">
+                    <label for="otpCode">認証コード (6桁)</label>
+                    <input type="text" id="otpCode" class="form-control" placeholder="000000" maxlength="6" required style="text-align: center; letter-spacing: 5px; font-size: 24px;">
+                </div>
+                <button type="submit" id="otpSubmitBtn" class="analyze-btn" style="width: 100%; margin-top: 10px;">
+                    認証してログイン
+                </button>
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="javascript:location.reload()" style="color: var(--text-muted); text-decoration: none; font-size: 13px;">← ログイン画面に戻る</a>
                 </div>
             </form>
 
@@ -146,13 +156,15 @@
     </div>
 
     <script>
+        let pendingUserId = null;
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
             const error = document.getElementById('errorMsg');
             
             btn.disabled = true;
-            btn.textContent = 'ログイン中...';
+            btn.textContent = '処理中...';
             error.style.display = 'none';
 
             const email = document.getElementById('email').value.trim();
@@ -169,18 +181,59 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    window.location.href = '/';
+                    if (data.requires_2fa) {
+                        pendingUserId = data.user_id;
+                        document.getElementById('loginForm').style.display = 'none';
+                        document.getElementById('otpForm').style.display = 'block';
+                    } else {
+                        window.location.href = '/';
+                    }
                 } else {
                     error.textContent = data.error;
                     error.style.display = 'block';
                     btn.disabled = false;
-                    btn.textContent = 'ログイン';
+                    btn.textContent = 'システムにログイン';
                 }
             } catch (err) {
                 error.textContent = '通信エラーが発生しました。';
                 error.style.display = 'block';
                 btn.disabled = false;
-                btn.textContent = 'ログイン';
+                btn.textContent = 'システムにログイン';
+            }
+        });
+
+        document.getElementById('otpForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('otpSubmitBtn');
+            const error = document.getElementById('errorMsg');
+            const code = document.getElementById('otpCode').value.trim();
+            
+            btn.disabled = true;
+            btn.textContent = '認証中...';
+            error.style.display = 'none';
+
+            try {
+                const response = await fetch('/verify_otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: pendingUserId, code: code })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    error.textContent = data.error;
+                    error.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = '認証してログイン';
+                }
+            } catch (err) {
+                error.textContent = '認証に失敗しました。';
+                error.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = '認証してログイン';
             }
         });
 

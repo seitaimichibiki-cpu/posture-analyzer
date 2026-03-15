@@ -64,9 +64,12 @@
             <div class="logo">整体院 導</div>
             <h1>会員管理パネル</h1>
             <p class="subtitle">サブスクリプション契約状態の管理</p>
-            <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <a href="/" style="color: var(--text-muted); text-decoration: none; font-size: 14px;">← 解析ツールに戻る</a>
-                <a href="/admin/backup" class="btn" style="background: #4a5578; color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">📥 Obsidian用バックアップ</a>
+                <div style="display: flex; gap: 10px;">
+                    <a href="/admin/export_db" class="btn" style="background: var(--accent); color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">📥 全データJSON出力</a>
+                    <a href="/admin/backup" class="btn" style="background: #4a5578; color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">📥 会員リスト(MD)</a>
+                </div>
             </div>
         </header>
 

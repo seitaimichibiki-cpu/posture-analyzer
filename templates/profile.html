@@ -106,24 +106,20 @@
                 <h2 style="margin-bottom: 20px; font-size: 18px; color: var(--accent);">👤 会員情報</h2>
                 
                 <div class="info-group">
-                    <span class="info-label">メールアドレス</span>
-                    <div class="info-value">{{ user.email }}</div>
-                </div>
-
-                <div class="info-group">
-                    <span class="info-label">契約ステータス</span>
-                    <div>
-                        {% if user.is_active_member %}
-                        <span class="status-badge status-active">● サブスク契約中</span>
-                        {% else %}
-                        <span class="status-badge status-inactive">● 未契約（プレビューのみ）</span>
-                        {% endif %}
+                    <span class="info-label">二要素認証 (2FA)</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
+                        <div>
+                            <span id="tfa-status-text" class="status-badge {{ 'status-active' if user.is_2fa_enabled else 'status-inactive' }}">
+                                {{ '有効' if user.is_2fa_enabled else '無効' }}
+                            </span>
+                        </div>
+                        <button type="button" onclick="toggle2FA()" class="primary-btn" style="padding: 6px 12px; font-size: 12px; background: var(--accent); margin: 0; width: auto;">
+                            設定を切り替える
+                        </button>
                     </div>
-                    {% if not user.is_active_member %}
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
-                        ※解析結果のダウンロードにはAirPAYでのご契約が必要です。窓口にてお問い合わせください。
+                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+                        ※有効にすると、ログイン時に登録メールアドレスへ認証コードが送信されます。
                     </p>
-                    {% endif %}
                 </div>
             </section>
 
@@ -447,6 +443,22 @@
                 }
             } catch (err) {
                 alert('削除に失敗しました。');
+            }
+        }
+
+        async function toggle2FA() {
+            if (!confirm('二要素認証の設定を変更しますか？')) return;
+            try {
+                const response = await fetch('/settings/toggle_2fa', { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    const statusText = document.getElementById('tfa-status-text');
+                    statusText.textContent = result.is_2fa_enabled ? '有効' : '無効';
+                    statusText.className = 'status-badge ' + (result.is_2fa_enabled ? 'status-active' : 'status-inactive');
+                    alert('二要素認証の設定を更新しました。');
+                }
+            } catch (error) {
+                alert('通信エラーが発生しました。');
             }
         }
 

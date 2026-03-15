@@ -4,7 +4,7 @@ import uuid
 import json
 from datetime import datetime, timedelta
 import urllib.parse
-from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect, flash
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect, flash, abort
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy
@@ -18,6 +18,10 @@ from dotenv import load_dotenv
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 register_heif_opener()
+import re
+import re
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # .envファイルがあれば読み込む (ローカル開発用)
 load_dotenv()
@@ -43,6 +47,14 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# レートリミットの設定
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
 
 # バックアップ用トークンも環境変数から取得
 BACKUP_TOKEN = os.environ.get('BACKUP_TOKEN')
@@ -267,7 +279,23 @@ def init_and_migrate():
             app.logger.error(f"Migration error: {e}")
             print(f"Migration error: {e}")
 
-# ─── データベースモデル ──────────────────────────────────────────────────────
+def is_strong_password(password):
+    """
+    パスワード強度チェック:
+    8文字以上、英大文字・小文字・数字を各1文字以上含む
+    """
+    import re # reモジュールをここでインポート
+    if len(password) < 8:
+        return False
+    if not re.search(r"[a-z]", password):
+        return False
+    if not re.search(r"[A-Z]", password):
+        return False
+    if not re.search(r"[0-9]", password):
+        return False
+    return True
+
+# ─── データベース初期化・移行 ──────────────────────────────────────────────────
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -284,6 +312,11 @@ class User(UserMixin, db.Model):
     # ログイン試行制限用
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
+    # 二要素認証(OTP)用
+    otp_secret = db.Column(db.String(32), nullable=True)
+    otp_code = db.Column(db.String(6), nullable=True)
+    otp_expiry = db.Column(db.DateTime, nullable=True)
+    is_2fa_enabled = db.Column(db.Boolean, default=False)
 
 class LineUserMapping(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -418,12 +451,30 @@ def login():
                 # 成功時は失敗カウントをリセット
                 user.failed_login_attempts = 0
                 user.locked_until = None
-                db.session.commit()
                 
+                # 2FAが有効な場合
+                if user.is_2fa_enabled:
+                    import random
+                    otp = f"{random.randint(100000, 999999)}"
+                    user.otp_code = otp
+                    user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+                    db.session.commit()
+                    
+                    # 認証コード送信
+                    msg = Message(
+                        "【整体院 導】ログイン認証コード",
+                        recipients=[user.email],
+                        body=f"認証コードは {otp} です。10分以内に力してください。"
+                    )
+                    mail.send(msg)
+                    
+                    return jsonify({'success': True, 'requires_2fa': True, 'user_id': user.id})
+                
+                db.session.commit()
                 # 自動ログイン設定
                 remember = request.form.get('remember') == 'true'
                 login_user(user, remember=remember)
-                return jsonify({'success': True})
+                return jsonify({'success': True, 'requires_2fa': False})
             else:
                 # 失敗時はカウントアップ
                 user.failed_login_attempts += 1
@@ -441,6 +492,23 @@ def login():
             print(f"Login failed: User not found: {email}")
             return jsonify({'success': False, 'error': 'メールアドレスまたはパスワードが正しくありません。'}), 401
     return render_template('login.html')
+
+@app.route('/verify_otp', methods=['POST'])
+@limiter.limit("5 per minute")
+def verify_otp():
+    data = request.json
+    user_id = data.get('user_id')
+    code = data.get('code')
+    user = User.query.get(user_id)
+    
+    if user and user.otp_code == code and user.otp_expiry > datetime.utcnow():
+        user.otp_code = None
+        user.otp_expiry = None
+        db.session.commit()
+        login_user(user)
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': '認証コードが正しくないか、期限切れです。'}), 401
 
 @app.route('/logout')
 @login_required
@@ -663,6 +731,7 @@ def admin_unlock_user(user_id):
     user.locked_until = None
     db.session.commit()
     return jsonify({'success': True})
+@app.route('/admin/register', methods=['POST'])
 @login_required
 def admin_register_user():
     if not current_user.is_admin:
@@ -675,6 +744,9 @@ def admin_register_user():
     if not email or not password:
         return jsonify({'success': False, 'error': 'メールアドレスとパスワードを入力してください。'}), 400
     
+    if not is_strong_password(password):
+        return jsonify({'success': False, 'error': 'パスワードが弱すぎます。8文字以上で英大文字・小文字・数字を組み合わせてください。'}), 400
+
     if User.query.filter_by(email=email).first():
         return jsonify({'success': False, 'error': 'このメールアドレスは既に登録されています。'}), 400
     
@@ -690,8 +762,39 @@ def admin_register_user():
     
     return jsonify({'success': True})
 
-# ─── パスワードリセット ──────────────────────────────────────────────────────
-@app.route('/forgot_password', methods=['GET', 'POST'])
+@app.route('/admin/export_db')
+@login_required
+def admin_export_db():
+    if not current_user.is_admin:
+        return abort(403)
+    
+    data = {
+        'patients': [
+            {'id': p.id, 'chart_number': p.chart_number, 'name': p.name, 'created_at': p.created_at.isoformat() if p.created_at else None}
+            for p in Patient.query.all()
+        ],
+        'records': [
+            {
+                'id': r.id, 
+                'patient_db_id': r.patient_db_id, 
+                'view_type': r.view_type, 
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+                'shoulder_angle': r.shoulder_angle,
+                'pelvis_angle': r.pelvis_angle
+            }
+            for r in AnalysisRecord.query.all()
+        ]
+    }
+    return jsonify(data)
+
+@app.route('/settings/toggle_2fa', methods=['POST'])
+@login_required
+def toggle_2fa():
+    current_user.is_2fa_enabled = not current_user.is_2fa_enabled
+    db.session.commit()
+    return jsonify({'success': True, 'is_2fa_enabled': current_user.is_2fa_enabled})
+
+@app.route('/admin/export_csv')
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -1216,9 +1319,10 @@ def delete_record(record_id):
 
 # ─── 比較解析機能 ────────────────────────────────────────────────────────────
 
-@app.route('/compare', methods=['POST'])
+@app.route('/analyze', methods=['POST'])
 @login_required
-def compare():
+@limiter.limit("5 per minute")
+def analyze():
     if 'image_before' not in request.files or 'image_after' not in request.files:
         return jsonify({'error': 'Before/After both images are required'}), 400
     
