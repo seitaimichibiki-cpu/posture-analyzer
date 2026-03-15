@@ -181,6 +181,10 @@ def init_and_migrate():
                 if 'patient_id' not in record_cols:
                     conn.execute(text('ALTER TABLE analysis_record ADD COLUMN patient_id VARCHAR(50)'))
                 
+                # Patientテーブルとの紐付け用カラム
+                if 'patient_db_id' not in record_cols:
+                    conn.execute(text('ALTER TABLE analysis_record ADD COLUMN patient_db_id INTEGER REFERENCES patient(id)'))
+                
                 # メモ
                 if 'memo' not in record_cols:
                     conn.execute(text('ALTER TABLE analysis_record ADD COLUMN memo TEXT'))
@@ -223,6 +227,42 @@ def init_and_migrate():
                 db.create_all()
                 
             print("Database migration completed successfully.")
+            
+            # --- データ移行処理 (patient_id -> Patientテーブル) ---
+            with app.app_context():
+                records_to_migrate = AnalysisRecord.query.filter(AnalysisRecord.patient_db_id == None).all()
+                if records_to_migrate:
+                    print(f"Migrating {len(records_to_migrate)} records to Patient table...")
+                    for rec in records_to_migrate:
+                        if not rec.patient_id: continue
+                        
+                        # 簡易的に、もし数値ならカルテ番号、それ以外なら名前として扱う
+                        # またはスペースで区切られている場合は「番号 名前」とみなす
+                        p_id_str = rec.patient_id.strip()
+                        chart_num = ""
+                        name = ""
+                        
+                        parts = p_id_str.split()
+                        if len(parts) >= 2:
+                            chart_num = parts[0]
+                            name = " ".join(parts[1:])
+                        elif p_id_str.isdigit():
+                            chart_num = p_id_str
+                            name = f"患者_{p_id_str}"
+                        else:
+                            name = p_id_str
+                            chart_num = "なし"
+                        
+                        # 既存のPatientを探す（同じユーザー内でカルテ番号か名前が一致）
+                        patient = Patient.query.filter_by(user_id=rec.user_id, chart_number=chart_num, name=name).first()
+                        if not patient:
+                            patient = Patient(user_id=rec.user_id, chart_number=chart_num, name=name)
+                            db.session.add(patient)
+                            db.session.flush() # IDを取得するためにフラッシュ
+                        
+                        rec.patient_db_id = patient.id
+                    db.session.commit()
+                    print("Data migration completed.")
         except Exception as e:
             app.logger.error(f"Migration error: {e}")
             print(f"Migration error: {e}")
@@ -258,10 +298,21 @@ class AnalysisLog(db.Model):
     view_type = db.Column(db.String(20), nullable=False) # 'front', 'side', 'compare'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Patient(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    chart_number = db.Column(db.String(50), nullable=False) # カルテ番号
+    name = db.Column(db.String(100), nullable=False) # 名前
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # リレーション
+    records = db.relationship('AnalysisRecord', backref='patient', lazy=True)
+
 class AnalysisRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    patient_id = db.Column(db.String(50), nullable=True) # 顧客ID/名前
+    patient_db_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=True) # 新規：Patientへの紐付け
+    patient_id = db.Column(db.String(50), nullable=True) # 以前：顧客ID/名前 (移行用)
     view_type = db.Column(db.String(20)) # 'front', 'side'
     
     # 正面データ
@@ -471,47 +522,62 @@ def stats():
 @login_required
 def api_search_patients():
     query = request.args.get('q', '').strip()
-    # ログインユーザーに関連するユニークな顧客IDを抽出
-    # 重複を排除し、最近のものを優先するためにIDでソート
-    subquery = db.session.query(
-        AnalysisRecord.patient_id,
-        db.func.max(AnalysisRecord.id).label('max_id')
-    ).filter(
-        AnalysisRecord.user_id == current_user.id,
-        AnalysisRecord.patient_id.ilike(f'%{query}%')
-    ).group_by(AnalysisRecord.patient_id).subquery()
-
-    results = db.session.query(subquery.c.patient_id)\
-        .order_by(subquery.c.max_id.desc())\
-        .limit(10).all()
+    # カルテ番号または名前で検索
+    patients = Patient.query.filter(
+        Patient.user_id == current_user.id,
+        (Patient.chart_number.ilike(f'%{query}%')) | (Patient.name.ilike(f'%{query}%'))
+    ).limit(10).all()
     
-    return jsonify([r.patient_id for r in results])
+    return jsonify([{
+        'id': p.id,
+        'chart_number': p.chart_number,
+        'name': p.name,
+        'display': f"[{p.chart_number}] {p.name}"
+    } for p in patients])
 @app.route('/api/recent_patients')
 @login_required
 def api_recent_patients():
-    """最近解析した患者リスト（ユニーク）を20件取得"""
+    """最近解析した患者リストを20件取得"""
+    # Patientテーブルと紐付いた最新レコードを取得
     results = db.session.query(
-        AnalysisRecord.patient_id,
+        Patient.id,
+        Patient.chart_number,
+        Patient.name,
         db.func.max(AnalysisRecord.created_at).label('last_date')
-    ).filter(AnalysisRecord.user_id == current_user.id)\
-     .group_by(AnalysisRecord.patient_id)\
+    ).join(AnalysisRecord, Patient.id == AnalysisRecord.patient_db_id)\
+     .filter(Patient.user_id == current_user.id)\
+     .group_by(Patient.id)\
      .order_by(db.text('last_date DESC'))\
      .limit(20).all()
     
-    return jsonify([{'id': r.patient_id} for r in results])
+    return jsonify([{
+        'id': r.id, 
+        'chart_number': r.chart_number, 
+        'name': r.name,
+        'display': f"[{r.chart_number}] {r.name}"
+    } for r in results])
 
 @app.route('/api/patient_stats')
 @login_required
 def api_patient_stats():
-    patient_id = request.args.get('patient_id')
-    if not patient_id:
-        return jsonify({'success': False, 'error': '顧客IDが必要です。'}), 400
+    patient_db_id = request.args.get('patient_db_id')
+    chart_number = request.args.get('chart_number') # 互換性のため
     
-    # 現在のログインユーザー（先生）が保存した、この患者のレコードを古い順に取得
-    records = AnalysisRecord.query.filter_by(
-        user_id=current_user.id, 
-        patient_id=patient_id
-    ).order_by(AnalysisRecord.created_at.asc()).all()
+    if patient_db_id:
+        records = AnalysisRecord.query.filter_by(
+            user_id=current_user.id, 
+            patient_db_id=patient_db_id
+        ).order_by(AnalysisRecord.created_at.asc()).all()
+    elif chart_number:
+        patient = Patient.query.filter_by(user_id=current_user.id, chart_number=chart_number).first()
+        if not patient:
+            return jsonify({'success': False, 'error': '顧客が見つかりません。'}), 404
+        records = AnalysisRecord.query.filter_by(
+            user_id=current_user.id, 
+            patient_db_id=patient.id
+        ).order_by(AnalysisRecord.created_at.asc()).all()
+    else:
+        return jsonify({'success': False, 'error': '顧客指定が必要です。'}), 400
     
     data = []
     for r in records:
@@ -528,8 +594,6 @@ def api_patient_stats():
             'trunk': r.trunk_pct
         })
     
-    # 重複する日付やデータが多い場合に備え、ビューごとに分けたデータも検討可能ですが
-    # フロントエンド側でフィルタリングする方が柔軟。
     return jsonify({'success': True, 'data': data})
 
 @app.route('/terms')
@@ -828,46 +892,51 @@ def analyze():
     
     file = request.files['image']
     view_type = request.form.get('view_type', 'auto') # 'front', 'side', or 'auto'
-    patient_id = request.form.get('patient_id', '')
+    chart_number = request.form.get('chart_number', '').strip()
+    patient_name = request.form.get('patient_name', '').strip()
 
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    if file.filename == '' or not chart_number or not patient_name:
+        return jsonify({'error': '画像、カルテ番号、名前はすべて必須です'}), 400
+
+    # Patientの特定または作成
+    patient = Patient.query.filter_by(user_id=current_user.id, chart_number=chart_number).first()
+    if not patient:
+        patient = Patient(user_id=current_user.id, chart_number=chart_number, name=patient_name)
+        db.session.add(patient)
+        db.session.flush()
+    else:
+        # 名前が空の場合のみ更新（必要に応じて）
+        if patient.name != patient_name:
+            patient.name = patient_name
 
     # ファイル名をユニークにする
     ext = os.path.splitext(file.filename)[1]
     uid = uuid.uuid4()
     filename = f"{uid}{ext}"
-    # 出力レポートは常にOpenCVが確実に書き込める.jpg形式に固定する
     input_path = os.path.join(UPLOAD_FOLDER, f"input_{uid}{ext}")
     output_path = os.path.join(UPLOAD_FOLDER, f"report_{uid}.jpg")
     
-    # 画像の処理と保存（HEIC/回転/リサイズ対応）
     if not process_uploaded_image(file, input_path):
         return jsonify({'success': False, 'error': '画像の処理に失敗しました。'}), 400
 
     try:
-        # 新しいクラスベースの解析実行
         res = get_analyzer().analyze(input_path, output_path, view_type=view_type)
 
         if res and res.get('success'):
-            # Cloudinaryへのアップロード
-            output_path = output_path # 標準の姿勢レポート
             muscle_output_path = res.get('muscle_report_path')
-            
             cloud_url = upload_to_cloudinary(output_path)
             muscle_cloud_url = upload_to_cloudinary(muscle_output_path) if muscle_output_path else None
             input_cloud_url = upload_to_cloudinary(input_path)
 
-            # ログ記録
             log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type=res.get('view', view_type))
             db.session.add(log)
             
-            # 数値データの保存
             try:
                 data = res.get('data', {})
                 record = AnalysisRecord(
                     user_id=current_user.id if current_user.is_authenticated else None,
-                    patient_id=patient_id,
+                    patient_db_id=patient.id, # 新しい紐付け
+                    patient_id=f"{chart_number} {patient_name}", # 互換性のため
                     view_type=res.get('view', view_type),
                     shoulder_angle=data.get('shoulder_angle'),
                     pelvis_angle=data.get('pelvis_angle'),
@@ -882,10 +951,7 @@ def analyze():
                     image_filename=cloud_url if cloud_url else os.path.basename(output_path),
                     input_filename=input_cloud_url if input_cloud_url else os.path.basename(input_path)
                 )
-                
-                # AIアドバイス生成
                 record.advice = generate_advice(record)
-                
                 db.session.add(record)
             except Exception as e:
                 print(f"Failed to save numerical data: {e}")
@@ -1071,45 +1137,48 @@ def delete_line_mapping(mapping_id):
 @app.route('/patients')
 @login_required
 def patients():
-    # 重複を除去したpatient_idのリストを取得し、それぞれの最新解析日も取得
-    # patient_idが空のものは除外
-    records = db.session.query(
-        AnalysisRecord.patient_id, 
+    # Patientテーブルをベースに最新来店日を取得
+    results = db.session.query(
+        Patient,
         db.func.max(AnalysisRecord.created_at).label('last_visit')
-    ).filter(
-        AnalysisRecord.user_id == current_user.id,
-        AnalysisRecord.patient_id != ''
-    ).group_by(AnalysisRecord.patient_id).all()
+    ).join(AnalysisRecord, Patient.id == AnalysisRecord.patient_db_id)\
+     .filter(Patient.user_id == current_user.id)\
+     .group_by(Patient.id).all()
     
     # ソート引数
     sort_by = request.args.get('sort', 'name') # 'name', 'visit'
     order = request.args.get('order', 'asc')
     
-    # recordsは [(id, date), ...] の形式
     patient_list = []
-    for r in records:
-        patient_list.append({'id': r[0], 'last_visit': r[1]})
+    for p, last_visit in results:
+        patient_list.append({
+            'db_id': p.id,
+            'chart_number': p.chart_number,
+            'name': p.name,
+            'last_visit': last_visit
+        })
         
     if sort_by == 'visit':
         patient_list.sort(key=lambda x: x['last_visit'], reverse=(order == 'desc'))
+    elif sort_by == 'chart':
+        patient_list.sort(key=lambda x: x['chart_number'], reverse=(order == 'desc'))
     else: # nameソート
-        patient_list.sort(key=lambda x: x['id'], reverse=(order == 'desc'))
+        patient_list.sort(key=lambda x: x['name'], reverse=(order == 'desc'))
         
     return render_template('patients.html', patients=patient_list, sort_by=sort_by, order=order)
 
-@app.route('/patient/<patient_id>')
+@app.route('/patient/<int:patient_db_id>')
 @login_required
-def patient_detail(patient_id):
-    # 特定の顧客の履歴を全件取得（自分のデータのみ、新しい順）
+def patient_detail(patient_db_id):
+    patient = Patient.query.filter_by(id=patient_db_id, user_id=current_user.id).first_or_404()
+    
+    # 履歴を全件取得
     records = AnalysisRecord.query.filter_by(
-        patient_id=patient_id,
+        patient_db_id=patient.id,
         user_id=current_user.id
     ).order_by(AnalysisRecord.created_at.desc()).all()
-    if not records:
-        flash("顧客データが見つかりませんでした。")
-        return redirect(url_for('patients'))
     
-    return render_template('patient_detail.html', patient_id=patient_id, records=records)
+    return render_template('patient_detail.html', patient=patient, records=records)
 
 @app.route('/record/memo/<int:record_id>', methods=['POST'])
 @login_required
@@ -1129,13 +1198,19 @@ def delete_record(record_id):
     record = AnalysisRecord.query.get_or_404(record_id)
     if record.user_id != current_user.id:
         return jsonify({'success': False, 'error': '権限がありません。'}), 403
-    patient_id = record.patient_id
+    
+    patient_db_id = record.patient_db_id
     db.session.delete(record)
     db.session.commit()
     
-    # もしその顧客のデータが他に残っていなければ、一覧へ戻す
-    remaining = AnalysisRecord.query.filter_by(patient_id=patient_id).count()
+    # もしその顧客のデータが他に残っていなければ、Patientレコードも消すか、一覧へ戻す
+    remaining = AnalysisRecord.query.filter_by(patient_db_id=patient_db_id).count()
     if remaining == 0:
+        # Patientレコードごと消す運用にする（任意）
+        patient = Patient.query.get(patient_db_id)
+        if patient:
+            db.session.delete(patient)
+            db.session.commit()
         return jsonify({'success': True, 'redirect': url_for('patients')})
     return jsonify({'success': True})
 
@@ -1150,7 +1225,21 @@ def compare():
     file_b = request.files['image_before']
     file_a = request.files['image_after']
     view_type = request.form.get('view_type', 'auto')
-    patient_id = request.form.get('patient_id', '')
+    chart_number = request.form.get('chart_number', '').strip()
+    patient_name = request.form.get('patient_name', '').strip()
+
+    if not chart_number or not patient_name:
+        return jsonify({'error': 'カルテ番号と名前は必須です'}), 400
+
+    # Patientの特定または作成
+    patient = Patient.query.filter_by(user_id=current_user.id, chart_number=chart_number).first()
+    if not patient:
+        patient = Patient(user_id=current_user.id, chart_number=chart_number, name=patient_name)
+        db.session.add(patient)
+        db.session.flush()
+    else:
+        if patient.name != patient_name:
+            patient.name = patient_name
 
     # ユニークファイル名生成
     uid = uuid.uuid4().hex[:8]
@@ -1162,7 +1251,6 @@ def compare():
     output_path = os.path.join(UPLOAD_FOLDER, f"report_comp_{uid}.jpg")
     muscle_output_path = os.path.join(UPLOAD_FOLDER, f"muscle_comp_{uid}.jpg")
     
-    # 画像の処理と保存（Before/After両方）
     if not process_uploaded_image(file_b, path_b) or not process_uploaded_image(file_a, path_a):
         return jsonify({'success': False, 'error': '画像の処理に失敗しました。'}), 400
 
@@ -1172,23 +1260,20 @@ def compare():
             data = res.get('data', {})
             view = data.get('view', view_type)
             
-            # ログ記録
             log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type='compare')
             db.session.add(log)
             
-            # 数値データの保存
             def save_comp_data(items, prefix_type):
                 # items is a list of {"n": name, "v": value, "s": score}
                 d = {it['n']: it['v'] for it in items}
-                # Cloudinaryへのアップロード
                 c_url = upload_to_cloudinary(output_path)
-                # Before/Afterに応じて入力を選択
                 source_path = path_b if prefix_type == 'before' else path_a
                 i_url = upload_to_cloudinary(source_path)
 
                 record = AnalysisRecord(
                     user_id=current_user.id if current_user.is_authenticated else None,
-                    patient_id=patient_id,
+                    patient_db_id=patient.id,
+                    patient_id=f"{chart_number} {patient_name}",
                     view_type=f"{view}_{prefix_type}",
                     shoulder_angle=d.get('肩傾き') or d.get('ラウンド肩'),
                     pelvis_angle=d.get('骨盤傾き') or d.get('骨盤前後傾'),
@@ -1211,13 +1296,11 @@ def compare():
             except Exception as e:
                 print(f"Failed to save comparison numerical data: {e}")
 
-            # レポート画像のアップロード
             report_cloud_url = upload_to_cloudinary(output_path)
             muscle_cloud_url = upload_to_cloudinary(muscle_output_path)
 
             db.session.commit()
 
-            # フォールバック
             if not report_cloud_url:
                 report_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path)}')
             if not muscle_cloud_url:

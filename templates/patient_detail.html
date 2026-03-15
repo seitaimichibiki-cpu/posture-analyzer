@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>顧客詳細 ｜ {{ patient_id }} ｜ 整体院 導</title>
+    <title>顧客詳細 ｜ {{ patient.name }} ｜ 整体院 導</title>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -236,7 +236,8 @@
     <div class="container">
         <header>
             <div class="logo">整体院 導</div>
-            <h1>顧客詳細: {{ patient_id }}</h1>
+            <h1>顧客詳細: {{ patient.name }}</h1>
+            <p class="subtitle">カルテ番号: {{ patient.chart_number }}</p>
             <p class="subtitle">解析履歴と施術記録</p>
             <div style="margin-top: 15px;">
                 <a href="{{ url_for('patients') }}" style="color: var(--text-muted); text-decoration: none; font-size: 13px;">← 顧客一覧へ戻る</a>
@@ -481,8 +482,8 @@
 
         async function loadProgressCharts() {
             try {
-                const pid = "{{ patient_id }}";
-                const res = await fetch(`/api/patient_stats?patient_id=${encodeURIComponent(pid)}`);
+                const dbId = "{{ patient.id }}";
+                const res = await fetch(`/api/patient_stats?patient_db_id=${dbId}`);
                 const result = await res.json();
                 
                 if (result.success && result.data.length > 1) {

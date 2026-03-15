@@ -122,14 +122,23 @@
                 </div>
 
                 <div class="actions" style="margin-top: 24px;">
-                    <div class="form-group" style="margin-bottom: 15px; position: relative;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
-                            <label for="patient_id" style="font-size: 13px; color: var(--accent); font-weight: bold;">顧客ID・お名前（必須）</label>
-                            <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
+                    <div class="form-group" style="margin-bottom: 20px; position: relative;">
+                        <!-- 新規：カルテ番号と名前の分離 -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <div style="flex: 1;">
+                                <label for="chart_number" style="font-size: 13px; color: var(--accent); font-weight: bold; display: block; margin-bottom: 6px;">カルテ番号（必須）</label>
+                                <input type="text" id="chart_number" placeholder="101" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid var(--accent); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off" oninput="onInputPatient()">
+                            </div>
+                            <div style="flex: 1.5;">
+                                <label for="patient_name" style="font-size: 13px; color: var(--accent); font-weight: bold; display: block; margin-bottom: 6px;">お名前（必須）</label>
+                                <input type="text" id="patient_name" placeholder="山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid var(--accent); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off" oninput="onInputPatient()">
+                            </div>
                         </div>
-                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid var(--accent); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off" oninput="checkReady()">
+                        <div style="text-align: right;">
+                            <a id="historyLink" href="javascript:void(0)" onclick="viewHistory()" style="font-size: 11px; color: var(--accent); text-decoration: none; opacity: 0.5; pointer-events: none;">📊 履歴を見る</a>
+                        </div>
                         <!-- オートコンプリートの結果表示用 -->
-                        <div id="patient-search-results" class="line-search-results" style="display: none;"></div>
+                        <div id="patient-search-results" class="line-search-results" style="display: none; top: 70px;"></div>
                     </div>
                     <button id="btnAnalyze" class="analyze-btn" onclick="analyze()" disabled>🚀 解析を開始する</button>
                     <button class="primary-btn" onclick="reset()" style="margin-top: 10px; font-size: 13px; padding: 12px; opacity: 0.7;">🔄 リセット</button>
@@ -230,7 +239,8 @@
 
         function checkReady() {
             const btn = document.getElementById('btnAnalyze');
-            const patientId = document.getElementById('patient_id').value.trim();
+            const chartNum = document.getElementById('chart_number').value.trim();
+            const name = document.getElementById('patient_name').value.trim();
             
             let photoReady = false;
             if (viewMode === 'compare') {
@@ -239,13 +249,13 @@
                 photoReady = !!fileSingle;
             }
             
-            // 写真と顧客IDの両方が揃っている場合のみボタンを有効化
-            btn.disabled = !(photoReady && patientId);
+            btn.disabled = !(photoReady && chartNum && name);
         }
 
         async function analyze() {
             const formData = new FormData();
-            formData.append('patient_id', document.getElementById('patient_id').value);
+            formData.append('chart_number', document.getElementById('chart_number').value);
+            formData.append('patient_name', document.getElementById('patient_name').value);
             
             try {
                 document.getElementById('loadingOverlay').style.display = 'flex';
@@ -387,23 +397,69 @@
         }
 
         // --- Autocomplete Logic ---
-        const pi = document.getElementById('patient_id');
-        const pr = document.getElementById('patient-search-results');
-        pi.addEventListener('input', async () => {
-            const q = pi.value.trim();
-            checkReady(); // バリデーションを実行
-            if (q.length < 1) { pr.style.display = 'none'; return; }
-            const res = await fetch(`/api/patients/search?q=${encodeURIComponent(q)}`);
-            const pts = await res.json();
-            if (pts.length > 0) {
-                pr.innerHTML = pts.map(n => `<div class="line-search-item" onclick="selectPt('${n}')">${n}</div>`).join('');
-                pr.style.display = 'block';
-            } else { pr.style.display = 'none'; }
-        });
-        function selectPt(n) { 
-            pi.value = n; 
-            pr.style.display = 'none'; 
-            checkReady(); // 選択時にもバリデーションを実行
+        let selectedPatientId = null;
+        let searchTimer;
+        
+        function onInputPatient() {
+            const chart = document.getElementById('chart_number').value.trim();
+            const name = document.getElementById('patient_name').value.trim();
+            const results = document.getElementById('patient-search-results');
+            
+            checkReady();
+            
+            // 入力中は何もしない
+            clearTimeout(searchTimer);
+            
+            const q = chart || name;
+            if (q.length < 1) {
+                results.style.display = 'none';
+                updateHistoryLink(null);
+                return;
+            }
+            
+            searchTimer = setTimeout(async () => {
+                const res = await fetch(`/api/patients/search?q=${encodeURIComponent(q)}`);
+                const pts = await res.json();
+                if (pts.length > 0) {
+                    results.innerHTML = pts.map(p => `
+                        <div class="line-search-item" onclick="selectPt(${p.id}, '${p.chart_number}', '${p.name}')">
+                            <span style="font-weight:bold;">${p.name}</span>
+                            <span style="font-size:11px; opacity:0.7; margin-left:10px;">[${p.chart_number}]</span>
+                        </div>
+                    `).join('');
+                    results.style.display = 'block';
+                } else {
+                    results.style.display = 'none';
+                    updateHistoryLink(null);
+                }
+            }, 300);
+        }
+
+        function selectPt(id, chart, name) { 
+            document.getElementById('chart_number').value = chart;
+            document.getElementById('patient_name').value = name;
+            document.getElementById('patient-search-results').style.display = 'none';
+            updateHistoryLink(id);
+            checkReady();
+        }
+        
+        function updateHistoryLink(id) {
+            const link = document.getElementById('historyLink');
+            if (id) {
+                link.style.opacity = '1';
+                link.style.pointerEvents = 'auto';
+                selectedPatientId = id;
+            } else {
+                link.style.opacity = '0.5';
+                link.style.pointerEvents = 'none';
+                selectedPatientId = null;
+            }
+        }
+        
+        function viewHistory() {
+            if (selectedPatientId) {
+                location.href = '/patient/' + selectedPatientId;
+            }
         }
 
         function toggleGuide(show) {

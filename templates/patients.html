@@ -86,6 +86,10 @@
                        class="sort-btn {{ 'active' if sort_by == 'name' else '' }}">
                         名前順 {{ '▲' if sort_by == 'name' and order == 'asc' else '▼' if sort_by == 'name' else '' }}
                     </a>
+                    <a href="{{ url_for('patients', sort='chart', order='asc' if sort_by == 'chart' and order == 'desc' else 'desc') }}" 
+                       class="sort-btn {{ 'active' if sort_by == 'chart' else '' }}">
+                        カルテ番号順 {{ '▲' if sort_by == 'chart' and order == 'asc' else '▼' if sort_by == 'chart' else '' }}
+                    </a>
                     <a href="{{ url_for('patients', sort='visit', order='asc' if sort_by == 'visit' and order == 'desc' else 'desc') }}" 
                        class="sort-btn {{ 'active' if sort_by == 'visit' else '' }}">
                         来店日順 {{ '▲' if sort_by == 'visit' and order == 'asc' else '▼' if sort_by == 'visit' else '' }}
@@ -94,9 +98,10 @@
 
                 <div class="patient-list">
                     {% for patient in patients %}
-                    <a href="{{ url_for('patient_detail', patient_id=patient.id) }}" class="patient-card">
+                    <a href="{{ url_for('patient_detail', patient_db_id=patient.db_id) }}" class="patient-card">
                         <div class="patient-info">
-                            <h3>ID/名前: {{ patient.id }}</h3>
+                            <h3>{{ patient.name }}</h3>
+                            <p>カルテ番号: {{ patient.chart_number }}</p>
                             <p>最終解析日: {{ patient.last_visit.strftime('%Y/%m/%d %H:%M') }}</p>
                         </div>
                         <div class="patient-arrow" style="color: var(--accent); font-weight: bold;">→</div>

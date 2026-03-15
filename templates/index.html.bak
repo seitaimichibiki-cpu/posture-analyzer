@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>整体院 導 ｜ AI 姿勢解析システム</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- PWA -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#080a12">
+    <link rel="apple-touch-icon" href="/static/icon-512.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">整体院 導</div>
+            <h1>AI 姿勢解析システム</h1>
+            <p class="subtitle">MediaPipe 高精度姿勢推定エンジン</p>
+
+            <div style="margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 13px;">
+                <span>👤 {{ user.email.split('@')[0] }} 様</span>
+                {% if user.is_active_member %}
+                <span style="color: var(--success);">● サブスク契約中</span>
+                {% else %}
+                <span style="color: #ff4757;">● 未契約（プレビューのみ）</span>
+                {% endif %}
+                <a href="{{ url_for('patients') }}" style="color: var(--accent); text-decoration: none; font-weight: 700; border: 1px solid var(--accent); padding: 2px 8px; border-radius: 6px; font-size: 11px;">👥 顧客管理</a>
+                <a href="{{ url_for('profile') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor; margin-left: 10px;">マイページ</a>
+                <a href="{{ url_for('logout') }}" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px solid currentColor; margin-left: 10px;">ログアウト</a>
+                {% if user.is_admin %}
+                <a href="{{ url_for('admin') }}" style="color: var(--accent); text-decoration: none; font-weight: 700; border: 1px solid var(--accent); padding: 2px 8px; border-radius: 6px; font-size: 11px;">管理者パネル</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main>
+            <div class="card">
+            {% if not user.is_active_member %}
+            <div style="background: rgba(255, 71, 87, 0.1); border: 1px solid #ff4757; color: #ff4757; padding: 15px; border-radius: 12px; margin-bottom: 20px; font-size: 14px; text-align: center;">
+                <strong>⚠️ 利用制限中</strong><br>
+                解析結果のダウンロードには、AirPAYでの月額契約が必要です。
+            </div>
+            {% endif %}
+
+            <div class="view-selector">
+                    <button id="btnFront" class="view-btn active" onclick="setView('front')">正面解析</button>
+                    <button id="btnSide" class="view-btn" onclick="setView('side')">側面解析</button>
+                    <button id="btnCompare" class="view-btn" onclick="setView('compare')">比較（B/A）</button>
+                </div>
+
+                <div id="singleModeArea" class="card photo-card">
+                    <div class="guide-control">
+                        <span class="guide-label">撮影ガイド表示</span>
+                        <label class="switch">
+                            <input type="checkbox" id="guideToggle" onchange="toggleGuide(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="previewArea" class="preview-area">
+                        <div class="guide-overlay">
+                            <div class="guide-line v-center"></div>
+                            <div class="guide-line h-line-1"></div>
+                            <div class="guide-line h-line-2"></div>
+                        </div>
+                        <div class="default-msg">
+                            <span class="icon">📸</span>
+                            <p>解析する写真を撮影または選択してください</p>
+                        </div>
+                        <img id="imagePreview" src="" alt="Preview" style="display: none;">
+                    </div>
+                    
+                    <div class="actions">
+                        <input type="file" id="fileInputCamera" accept="image/*" capture="camera" style="display: none;">
+                        <input type="file" id="fileInputLibrary" accept="image/*" style="display: none;">
+                        <div class="input-group">
+                            <button class="primary-btn flex-1" onclick="document.getElementById('fileInputCamera').click()">📸 写真を撮る</button>
+                            <button class="primary-btn flex-1" onclick="document.getElementById('fileInputLibrary').click()">📁 フォルダから選択</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparison Mode UI -->
+                <div id="compareModeArea" class="comparison-container" style="display: none;">
+                    <div class="card photo-card comp-card">
+                        <p class="comp-label">Before (以前)</p>
+                        <div class="preview-area small" onclick="document.getElementById('fileCompB').click()">
+                            <div class="guide-overlay">
+                                <div class="guide-line v-center"></div>
+                                <div class="guide-line h-line-1"></div>
+                                <div class="guide-line h-line-2"></div>
+                            </div>
+                            <div id="msgB" class="default-msg"><span>📸</span></div>
+                            <img id="prevB" src="" style="display: none;">
+                        </div>
+                        <input type="file" id="fileCompB" accept="image/*" style="display: none;">
+                    </div>
+                    <div class="card photo-card comp-card">
+                        <p class="comp-label">After (今回)</p>
+                        <div class="preview-area small" onclick="document.getElementById('fileCompA').click()">
+                            <div class="guide-overlay">
+                                <div class="guide-line v-center"></div>
+                                <div class="guide-line h-line-1"></div>
+                                <div class="guide-line h-line-2"></div>
+                            </div>
+                            <div id="msgA" class="default-msg"><span>📸</span></div>
+                            <img id="prevA" src="" style="display: none;">
+                        </div>
+                        <input type="file" id="fileCompA" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+
+                <div class="actions-footer">
+                    <div class="form-group" style="margin-bottom: 15px; position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                            <label for="patient_id" style="font-size: 13px; color: var(--text-muted);">顧客ID・お名前（任意）</label>
+                            <a href="javascript:void(0)" onclick="location.href='/stats?patient_id=' + document.getElementById('patient_id').value" style="font-size: 11px; color: var(--accent); text-decoration: none;">📊 履歴を見る</a>
+                        </div>
+                        <input type="text" id="patient_id" placeholder="例: 101 または 山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off">
+                        <div id="patient-search-results" class="line-search-results"></div>
+                    </div>
+                    <button id="btnAnalyze" class="analyze-btn" disabled onclick="handleExecution()">🚀 解析を実行</button>
+                </div>
+            </section>
+
+            <!-- Loading Overlay -->
+      <!-- ローディング表示用 (高級感アップ) -->
+    <div id="loadingOverlay" class="overlay" style="display: none;">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <p style="font-weight: 700; letter-spacing: 1px; margin-bottom: 8px;">AI ANALYSIS IN PROGRESS</p>
+            <span>高度な骨格検出を実行中...</span>
+            <span>（約5〜10秒ほどかかります）</span>
+        </div>
+    </div>
+
+            <!-- Result Section -->
+            <section id="resultSection" class="result-section" style="display: none;">
+                <div class="card result-card">
+                    <h2>解析レポート</h2>
+                    <div class="report-wrapper">
+                        <img id="resultImage" src="" alt="Analysis Report">
+                    </div>
+                    <p class="guide-text">※画像を長押しして保存することもできます</p>
+                    <div class="result-actions">
+                        <a id="downloadBtn" href="" download="姿勢解析レポート.jpg" class="secondary-btn">💾 画像を保存</a>
+                        <button class="text-btn" onclick="reset()">✨ 別の解析をする</button>
+                    </div>
+                </div>
+
+                <div id="adviceCard" class="card result-card" style="display: none; border-left: 4px solid var(--accent); margin-top: 15px;">
+                    <h3 style="font-size: 16px; margin-bottom: 12px; color: var(--accent); display: flex; align-items: center; gap: 8px;">
+                        <span>✨</span> AIアドバイス
+                    </h3>
+                    <p id="adviceText" style="font-size: 14px; line-height: 1.6; color: var(--text-muted); white-space: pre-wrap; margin: 0;"></p>
+                </div>
+            </section>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="{{ url_for('support') }}" style="color: var(--text-muted); text-decoration: none; font-size: 12px; opacity: 0.8;">お問い合わせ</a>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentView = 'front';
+        let fileSingle = null;
+        let fileB = null;
+        let fileA = null;
+
+        function setView(view) {
+            currentView = view;
+            document.getElementById('btnFront').classList.toggle('active', view === 'front');
+            document.getElementById('btnSide').classList.toggle('active', view === 'side');
+            document.getElementById('btnCompare').classList.toggle('active', view === 'compare');
+            
+            document.getElementById('singleModeArea').style.display = view === 'compare' ? 'none' : 'block';
+            document.getElementById('compareModeArea').style.display = view === 'compare' ? 'flex' : 'none';
+
+            checkReady();
+        }
+
+        const handleFileSelect = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                const targetImg = document.getElementById('imagePreview');
+                targetImg.src = re.target.result;
+                targetImg.style.display = 'block';
+                document.querySelector('#singleModeArea .default-msg').style.display = 'none';
+                fileSingle = file;
+                checkReady();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const handleCompB = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                document.getElementById('prevB').src = re.target.result;
+                document.getElementById('prevB').style.display = 'block';
+                document.getElementById('msgB').style.display = 'none';
+                fileB = file;
+                checkReady();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const handleCompA = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                document.getElementById('prevA').src = re.target.result;
+                document.getElementById('prevA').style.display = 'block';
+                document.getElementById('msgA').style.display = 'none';
+                fileA = file;
+                checkReady();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function checkReady() {
+            const btn = document.getElementById('btnAnalyze');
+            if (currentView === 'compare') {
+                btn.disabled = !(fileB && fileA);
+            } else {
+                btn.disabled = !fileSingle;
+            }
+        }
+
+        document.getElementById('fileInputCamera').onchange = handleFileSelect;
+        document.getElementById('fileInputLibrary').onchange = handleFileSelect;
+        document.getElementById('fileCompB').onchange = handleCompB;
+        document.getElementById('fileCompA').onchange = handleCompA;
+
+        async function handleExecution() {
+            if (currentView === 'compare') {
+                await startComparison();
+            } else {
+                await startAnalysis();
+            }
+        }
+
+        async function startAnalysis() {
+            if (!fileSingle) return;
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                // --- クライアント側でリサイズ処理 (メモリ節約のため) ---
+                const resizedBlob = await resizeImage(fileSingle, 600);
+                
+                const formData = new FormData();
+                formData.append('image', resizedBlob, 'upload.jpg');
+                formData.append('view_type', currentView);
+                formData.append('patient_id', document.getElementById('patient_id').value);
+
+                // クラウド環境（Render）の無料プランは最初の起動に時間がかかるため
+                // 明示的に "/analyze" への相対パスでリクエストを送る
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status} ${data.error || ''}`);
+                }
+                handleResult(data);
+            } catch (err) {
+                alert(`解析エラーが発生しました。\n内容: ${err.message}\n\n※サーバーが起動中の可能性があります。数分待ってから「再読み込み」してお試しください。`);
+                console.error(err);
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        async function startComparison() {
+            if (!(fileB && fileA)) return;
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                const resizedBlobB = await resizeImage(fileB, 600);
+                const resizedBlobA = await resizeImage(fileA, 600);
+
+                const formData = new FormData();
+                formData.append('image_before', resizedBlobB, 'before.jpg');
+                formData.append('image_after', resizedBlobA, 'after.jpg');
+                formData.append('view_type', 'auto');
+                formData.append('patient_id', document.getElementById('patient_id').value);
+
+                const response = await fetch('/compare', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status} ${data.error || ''}`);
+                }
+                handleResult(data);
+            } catch (err) {
+                alert(`比較解析エラーが発生しました。\n内容: ${err.message}\n\n※サーバーが起動中の可能性があります。数分待ってから「再読み込み」してお試しください。`);
+                console.error(err);
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        function handleResult(data) {
+            if (data.success) {
+                const filename = data.report_url.split('/').pop();
+                const reportUrl = data.report_url + '?t=' + Date.now();
+                document.getElementById('resultImage').src = reportUrl;
+                const downloadBtn = document.getElementById('downloadBtn');
+                downloadBtn.href = window.location.origin + '/download/' + filename;
+                
+                // アドバイス表示
+                if (data.advice) {
+                    document.getElementById('adviceText').textContent = data.advice;
+                    document.getElementById('adviceCard').style.display = 'block';
+                }
+
+                document.getElementById('resultSection').style.display = 'block';
+                document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert('エラー: ' + data.error);
+            }
+        }
+
+        // 画像をリサイズするユーティリティ関数
+        function resizeImage(file, maxSide) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > h && w > maxSide) {
+                            h = (h * maxSide) / w;
+                            w = maxSide;
+                        } else if (h > maxSide) {
+                            w = (w * maxSide) / h;
+                            h = maxSide;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function reset() {
+            fileSingle = null; fileB = null; fileA = null;
+            document.querySelectorAll('input[type="file"]').forEach(i => i.value = '');
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('prevB').style.display = 'none';
+            document.getElementById('prevA').style.display = 'none';
+            document.querySelectorAll('.default-msg').forEach(m => m.style.display = 'flex');
+            document.getElementById('btnAnalyze').disabled = true;
+            document.getElementById('resultSection').style.display = 'none';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- Patient Autocomplete Logic ---
+        let patientSearchTimeout;
+        let selectedPatientIdx = -1;
+
+        const patientInput = document.getElementById('patient_id');
+        const patientResults = document.getElementById('patient-search-results');
+
+        patientInput.addEventListener('input', () => {
+            const query = patientInput.value.trim();
+            if (query.length < 1) {
+                patientResults.style.display = 'none';
+                return;
+            }
+
+            clearTimeout(patientSearchTimeout);
+            patientSearchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/patients/search?q=${encodeURIComponent(query)}`);
+                    const patients = await response.json();
+                    
+                    if (patients.length > 0) {
+                        selectedPatientIdx = -1;
+                        patientResults.innerHTML = patients.map((name, idx) => `
+                            <div class="line-search-item patient-suggest-item" data-idx="${idx}" onclick="selectPatient('${name}')">
+                                <span>${name}</span>
+                            </div>
+                        `).join('');
+                        patientResults.style.display = 'block';
+                    } else {
+                        patientResults.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error('Patient search failed', err);
+                }
+            }, 300);
+        });
+
+        patientInput.addEventListener('keydown', (e) => {
+            const items = document.querySelectorAll('.patient-suggest-item');
+            if (patientResults.style.display === 'none' || items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedPatientIdx = (selectedPatientIdx + 1) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedPatientIdx = (selectedPatientIdx - 1 + items.length) % items.length;
+                updateSelection(items);
+            } else if (e.key === 'Enter' && selectedPatientIdx >= 0) {
+                e.preventDefault();
+                selectPatient(items[selectedPatientIdx].textContent.trim());
+            }
+        });
+
+        function updateSelection(items) {
+            items.forEach((item, idx) => {
+                item.style.background = idx === selectedPatientIdx ? 'rgba(6, 199, 85, 0.1)' : '';
+                item.style.color = idx === selectedPatientIdx ? '#06C755' : '';
+                if (idx === selectedPatientIdx) item.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        function selectPatient(name) {
+            patientInput.value = name;
+            patientResults.style.display = 'none';
+        }
+
+        function toggleGuide(show) {
+            const overlays = document.querySelectorAll('.guide-overlay');
+            overlays.forEach(el => el.style.display = show ? 'block' : 'none');
+            // 状態を保存
+            localStorage.setItem('show_guide', show);
+        }
+
+        // 初期表示設定
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('show_guide') === 'true';
+            document.getElementById('guideToggle').checked = saved;
+            toggleGuide(saved);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.form-group')) {
+                patientResults.style.display = 'none';
+            }
+        });
+    </script>
+    <footer style="margin-top: 60px; padding: 30px 20px; text-align: center; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted);">
+        <div style="margin-bottom: 10px;">
+            <a href="{{ url_for('terms') }}" style="color: var(--text-muted); text-decoration: none; margin: 0 10px;">利用規約</a>
+            <a href="{{ url_for('privacy') }}" style="color: var(--text-muted); text-decoration: none; margin: 0 10px;">プライバシーポリシー</a>
+        </div>
+        <div>&copy; 2026 整体院 導 AI姿勢解析システム</div>
+    </footer>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+    </script>
+</body>
+</html>
