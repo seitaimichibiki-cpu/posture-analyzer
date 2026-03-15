@@ -19,7 +19,7 @@ from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 register_heif_opener()
 import re
-import re
+import pyotp
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -183,6 +183,16 @@ def init_and_migrate():
                     conn.execute(text('ALTER TABLE "user" ADD COLUMN line_access_token VARCHAR(255)'))
                 if 'line_channel_secret' not in user_cols:
                     conn.execute(text('ALTER TABLE "user" ADD COLUMN line_channel_secret VARCHAR(100)'))
+                
+                # 二要素認証(OTP)用
+                if 'otp_secret' not in user_cols:
+                    conn.execute(text('ALTER TABLE "user" ADD COLUMN otp_secret VARCHAR(32)'))
+                if 'otp_code' not in user_cols:
+                    conn.execute(text('ALTER TABLE "user" ADD COLUMN otp_code VARCHAR(6)'))
+                if 'otp_expiry' not in user_cols:
+                    conn.execute(text('ALTER TABLE "user" ADD COLUMN otp_expiry DATETIME'))
+                if 'is_2fa_enabled' not in user_cols:
+                    conn.execute(text('ALTER TABLE "user" ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE'))
                 
                 conn.commit()
 
