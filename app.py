@@ -249,6 +249,7 @@ def init_and_migrate():
             run_sql('ALTER TABLE analysis_record ADD COLUMN image_filename VARCHAR(255)')
             run_sql('ALTER TABLE analysis_record ADD COLUMN input_filename VARCHAR(255)')
             run_sql('ALTER TABLE analysis_record ADD COLUMN advice TEXT')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN muscle_filename VARCHAR(255)')
             
             for col in ['shoulder_angle', 'pelvis_angle', 'head_angle', 'ear_shift_pct', 
                         'shoulder_shift_pct', 'pelvis_shift_pct', 'fhp_pct', 'rs_pct', 
@@ -368,6 +369,7 @@ class AnalysisRecord(db.Model):
     
     # 追記：画像パス保存用
     image_filename = db.Column(db.String(255), nullable=True)
+    muscle_filename = db.Column(db.String(255), nullable=True)
     input_filename = db.Column(db.String(255), nullable=True)
     
     # 追記：AIアドバイス
@@ -1152,6 +1154,7 @@ def analyze():
                     side_pelvis_angle=data.get('pelvis_angle') if res.get('view') == 'side' else None,
                     trunk_pct=data.get('trunk_pct'),
                     image_filename=cloud_url if cloud_url else os.path.basename(output_path),
+                    muscle_filename=muscle_cloud_url if muscle_cloud_url else (os.path.basename(muscle_output_path) if muscle_output_path else None),
                     input_filename=input_cloud_url if input_cloud_url else os.path.basename(input_path)
                 )
                 record.advice = generate_advice(record)
@@ -1518,6 +1521,7 @@ def analyze_compare():
                     rs_pct=d.get('ラウンド肩'),
                     trunk_pct=d.get('体幹領域') if d.get('体幹領域') is not None else d.get('体幹ライン'),
                     image_filename=report_url if report_url else os.path.basename(output_path),
+                    muscle_filename=muscle_cloud_url if muscle_cloud_url else os.path.basename(muscle_output_path),
                     input_filename=i_url if i_url else (os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a))
                 )
                 record.advice = generate_advice(record)
@@ -1562,6 +1566,7 @@ def protected_uploads(filename):
     # ファイル名からレコードを特定
     record = AnalysisRecord.query.filter(
         (AnalysisRecord.image_filename.contains(filename)) | 
+        (AnalysisRecord.muscle_filename.contains(filename)) |
         (AnalysisRecord.input_filename.contains(filename))
     ).first()
     
