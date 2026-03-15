@@ -33,4 +33,4 @@ psycopg2-binary==2.9.10
 cloudinary>=1.36.0
 pillow-heif==0.21.0
 Flask-Limiter==3.8.0
-pyotp==2.9.0
+
