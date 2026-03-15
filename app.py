@@ -735,15 +735,7 @@ def admin():
     users = User.query.all()
     return render_template('admin.html', users=users, stats=stats)
 
-@app.route('/admin/toggle/<int:user_id>', methods=['POST'])
-@login_required
-def admin_toggle_user(user_id):
-    if not current_user.is_admin:
-        return jsonify({'success': False}), 403
-    user = User.query.get_or_404(user_id)
-    user.is_active_member = not user.is_active_member
-    db.session.commit()
-    return jsonify({'success': True, 'new_status': user.is_active_member})
+
 
 @app.route('/admin/unlock/<int:user_id>', methods=['POST'])
 @login_required
