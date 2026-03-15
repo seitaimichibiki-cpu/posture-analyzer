@@ -930,6 +930,7 @@ def build_comparison_panel(it1, it2, risks, pw, ih, mode):
         for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
         y += 40
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (pw//2-120, y), "整体院 導 ｜ 技術提携：AI 姿勢解析エンジン", fXXS, GRAY)
+    return pil2cv2(np.array(p))
 
 if __name__ == "__main__":
     TEST_DIR = os.path.dirname(os.path.abspath(__file__))

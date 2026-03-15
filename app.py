@@ -1021,8 +1021,11 @@ def generate_advice(record):
     """
     advices = []
     
+    # 解析タイプ（正面・側面）の判定
+    base_view = record.view_type.split('_')[0] if record.view_type else ''
+    
     # 正面解析のアドバイス
-    if record.view_type == 'front':
+    if base_view == 'front':
         # 肩の傾き
         if record.shoulder_angle and abs(record.shoulder_angle) > 3.0:
             advices.append("肩の左右バランスに傾きが見られます。片側の筋肉の緊張や、鞄の持ち方の癖などが影響している可能性があります。")
