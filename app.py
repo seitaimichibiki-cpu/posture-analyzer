@@ -26,8 +26,7 @@ from flask_limiter.util import get_remote_address
 # .envファイルがあれば読み込む (ローカル開発用)
 load_dotenv()
 
-# 姿勢解析エンジンのインポート
-from pose_analyzer import PoseAnalyzer
+# 以前のPoseAnalyzerインポートは削除（重いため、必要時のみ呼ぶ）
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
@@ -315,9 +314,6 @@ class AnalysisRecord(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# モデル定義後にマイグレーション実行
-init_and_migrate()
-
 # 以前のハンドラは削除（統合済みのため）
 
 @app.route('/debug/db')
@@ -355,6 +351,8 @@ _analyzer = None
 def get_analyzer():
     global _analyzer
     if _analyzer is None:
+        print("INFO: 解析エンジンを読み込みます (MediaPipe)...")
+        from pose_analyzer import PoseAnalyzer
         _analyzer = PoseAnalyzer(MODEL_PATH)
     return _analyzer
 
@@ -1358,6 +1356,20 @@ def analyze():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # ポート番号はクラウド環境（Render等）の指定に従い、なければ 5001 を使用
+    # 開発環境での直接実行時
+    try:
+        init_and_migrate()
+    except:
+        pass
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port)
+else:
+    # Render (Gunicorn等) での読み込み時
+    # 起動直後に一度だけマイグレーションを試みる（エラーでアプリを止めない）
+    try:
+        with app.app_context():
+            init_and_migrate()
+    except Exception as e:
+        print(f"Startup background migration failed (Normal for some DB states): {e}")
+
+print("--- アプリケーションの準備が整いました ---")
