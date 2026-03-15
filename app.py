@@ -1208,10 +1208,10 @@ def delete_record(record_id):
 
 # ─── 比較解析機能 ────────────────────────────────────────────────────────────
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze_compare', methods=['POST'])
 @login_required
 @limiter.limit("5 per minute")
-def analyze():
+def analyze_compare():
     if 'image_before' not in request.files or 'image_after' not in request.files:
         return jsonify({'error': 'Before/After both images are required'}), 400
     
