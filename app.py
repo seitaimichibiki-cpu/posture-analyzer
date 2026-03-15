@@ -1040,11 +1040,10 @@ def generate_advice(record):
             advices.append("骨盤に少し傾きがあります。座り方（足を組む等）の習慣を見直すのが効果的です。")
         
         # 頭の傾き
-        if record.head_angle and abs(record.head_angle) > 3.0:
             advices.append("頭部の傾きが大きく、首すじの筋肉（胸鎖乳突筋など）に負担がかかりやすい状態です。")
             
     # 側面解析のアドバイス
-    elif record.view_type == 'side':
+    elif base_view == 'side':
         # FHP (首の突き出し)
         if record.fhp_pct and record.fhp_pct > 10.0:
             advices.append("頭部が前方へ強く突き出しています（スマホ首）。首や肩こり、頭痛の主な原因となります。アゴを引く意識が大切です。")
@@ -1115,11 +1114,9 @@ def analyze():
         if weight: patient.weight = float(weight)
         if chief_complaint: patient.chief_complaint = chief_complaint
 
-    # ファイル名をユニークにする
-    ext = os.path.splitext(file.filename)[1]
+    # ファイル名をユニークにする (常に .jpg として扱う)
     uid = uuid.uuid4()
-    filename = f"{uid}{ext}"
-    input_path = os.path.join(UPLOAD_FOLDER, f"input_{uid}{ext}")
+    input_path = os.path.join(UPLOAD_FOLDER, f"input_{uid}.jpg")
     output_path = os.path.join(UPLOAD_FOLDER, f"report_{uid}.jpg")
     
     if not process_uploaded_image(file, input_path):
@@ -1477,13 +1474,10 @@ def analyze_compare():
         if weight: patient.weight = float(weight)
         if chief_complaint: patient.chief_complaint = chief_complaint
 
-    # ユニークファイル名生成
+    # ユニークファイル名生成 (常に .jpg として扱う)
     uid = uuid.uuid4().hex[:8]
-    ext_b = os.path.splitext(file_b.filename)[1] or ".jpg"
-    ext_a = os.path.splitext(file_a.filename)[1] or ".jpg"
-    
-    path_b = os.path.join(UPLOAD_FOLDER, f"comp_b_{uid}{ext_b}")
-    path_a = os.path.join(UPLOAD_FOLDER, f"comp_a_{uid}{ext_a}")
+    path_b = os.path.join(UPLOAD_FOLDER, f"comp_b_{uid}.jpg")
+    path_a = os.path.join(UPLOAD_FOLDER, f"comp_a_{uid}.jpg")
     output_path = os.path.join(UPLOAD_FOLDER, f"report_comp_{uid}.jpg")
     muscle_output_path = os.path.join(UPLOAD_FOLDER, f"muscle_comp_{uid}.jpg")
     
@@ -1555,7 +1549,8 @@ def analyze_compare():
                 'advice': "比較解析を行いました。タブを切り替えて「姿勢」と「筋肉」の変化を確認してください。"
             })
         else:
-            return jsonify({'success': False, 'error': '人物の検出に失敗しました。'}), 200
+            error_msg = res.get('error', '人物の検出に失敗しました。')
+            return jsonify({'success': False, 'error': error_msg}), 200
     except Exception as e:
         import traceback; print(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
