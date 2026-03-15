@@ -686,10 +686,8 @@ def api_patient_stats():
     
     return jsonify({'success': True, 'data': data})
 
-@app.route('/patients')
-@login_required
-@subscription_required
-def patients():
+@app.route('/terms')
+def terms():
     return render_template('terms.html')
 
 @app.route('/privacy')
@@ -1271,6 +1269,7 @@ def delete_line_mapping(mapping_id):
 
 @app.route('/patients')
 @login_required
+@subscription_required
 def patients():
     # Patientテーブルをベースに最新来店日を取得
     results = db.session.query(
