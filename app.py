@@ -15,6 +15,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
 import cloudinary
 import cloudinary.uploader
+import cloudinary.utils
 from dotenv import load_dotenv
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
@@ -98,35 +99,43 @@ def upload_to_cloudinary(file_path):
         return None
 
 def get_signed_url(url):
-    """CloudinaryのURLから署名付きURLを生成する"""
-    if not url or not url.startswith('https://res.cloudinary.com'):
+    """CloudinaryのURLから署名付きURLを生成する。ローカルファイルの場合は認可エンドポイントを返す。"""
+    if not url:
         return url
-    
-    try:
-        # URLからpublic_idを抽出 (posture-reports/...)
-        parts = url.split('/')
-        version_idx = -1
-        for i, p in enumerate(parts):
-            if p.startswith('v') and p[1:].isdigit():
-                version_idx = i
-                break
         
-        if version_idx != -1:
-            public_id_with_ext = "/".join(parts[version_idx+1:])
-            public_id = os.path.splitext(public_id_with_ext)[0]
+    # CloudinaryのURL判定
+    if str(url).startswith('https://res.cloudinary.com'):
+        try:
+            # URLからpublic_idを抽出 (posture-reports/...)
+            parts = str(url).split('/')
+            version_idx = -1
+            for i, p in enumerate(parts):
+                if p.startswith('v') and p[1:].isdigit():
+                    version_idx = i
+                    break
             
-            # 有効期限1時間の署名付きURLを生成
-            from cloudinary.utils import cloudinary_url
-            signed_url, _ = cloudinary_url(
-                public_id,
-                sign_url=True,
-                type="authenticated",
-                secure=True,
-                expires_at=int((datetime.utcnow() + timedelta(hours=1)).timestamp())
-            )
-            return signed_url
-    except Exception as e:
-        print(f"Failed to generate signed URL: {e}")
+            if version_idx != -1:
+                public_id_with_ext = "/".join(parts[version_idx+1:])
+                public_id = os.path.splitext(public_id_with_ext)[0]
+                
+                # 有効期限1時間の署名付きURLを生成
+                import cloudinary.utils
+                signed_url, _ = cloudinary.utils.cloudinary_url(
+                    public_id,
+                    sign_url=True,
+                    type="authenticated",
+                    secure=True,
+                    expires_at=int((datetime.utcnow() + timedelta(hours=1)).timestamp())
+                )
+                return signed_url
+        except Exception as e:
+            print(f"Failed to generate signed URL: {e}")
+            return url
+
+    # ローカルファイル名またはパスの場合
+    filename = os.path.basename(str(url))
+    if filename and (filename.endswith('.jpg') or filename.endswith('.png') or filename.endswith('.jpeg')):
+        return url_for('protected_uploads', filename=filename)
     
     return url
 
@@ -1153,8 +1162,8 @@ def analyze():
             record_audit_log("ANALYSIS_EXECUTE", details=f"Posture analysis executed for patient_db_id: {patient.id} ({view_type})")
             
             # 署名付きURLを生成
-            signed_report_url = get_signed_url(cloud_url) if cloud_url else url_for('static', filename=f'uploads/{os.path.basename(output_path)}')
-            signed_muscle_url = get_signed_url(muscle_cloud_url) if muscle_cloud_url else (url_for('static', filename=f'uploads/{os.path.basename(muscle_output_path)}') if muscle_output_path else None)
+            signed_report_url = get_signed_url(cloud_url) if cloud_url else url_for('protected_uploads', filename=os.path.basename(output_path))
+            signed_muscle_url = get_signed_url(muscle_cloud_url) if muscle_cloud_url else url_for('protected_uploads', filename=os.path.basename(muscle_output_path))
 
             return jsonify({
                 'success': True,
@@ -1530,10 +1539,14 @@ def analyze_compare():
             if not muscle_cloud_url:
                 muscle_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(muscle_output_path)}')
 
+            # 署名付きURLを生成
+            signed_report_url = get_signed_url(report_cloud_url) if report_cloud_url else url_for('protected_uploads', filename=os.path.basename(output_path))
+            signed_muscle_url = get_signed_url(muscle_cloud_url) if muscle_cloud_url else url_for('protected_uploads', filename=os.path.basename(muscle_output_path))
+
             return jsonify({
                 'success': True,
-                'report_url': report_cloud_url,
-                'muscle_report_url': muscle_cloud_url,
+                'report_url': signed_report_url,
+                'muscle_report_url': signed_muscle_url,
                 'view_type': view,
                 'advice': "比較解析を行いました。タブを切り替えて「姿勢」と「筋肉」の変化を確認してください。"
             })

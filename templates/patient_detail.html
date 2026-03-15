@@ -277,13 +277,13 @@
 
                     {% if record.image_filename %}
                     <div class="report-preview">
-                        {% set img_url = record.image_filename if record.image_filename.startswith('http') else url_for('static', filename='uploads/' + record.image_filename) %}
+                        {% set img_url = record.image_url_signed if record.image_url_signed else (record.image_filename if record.image_filename.startswith('http') else url_for('static', filename='uploads/' + record.image_filename)) %}
                         <div class="report-img-wrapper" onclick="window.open('{{ img_url }}', '_blank')">
                             <img src="{{ img_url }}" alt="解析レポート">
                             <div class="img-label">解析レポート</div>
                         </div>
                         {% if record.input_filename %}
-                            {% set input_url = record.input_filename if record.input_filename.startswith('http') else url_for('static', filename='uploads/' + record.input_filename) %}
+                            {% set input_url = record.input_url_signed if record.input_url_signed else (record.input_filename if record.input_filename.startswith('http') else url_for('static', filename='uploads/' + record.input_filename)) %}
                             <div class="report-img-wrapper" onclick="window.open('{{ input_url }}', '_blank')">
                                 <img src="{{ input_url }}" alt="元画像">
                                 <div class="img-label">撮影した画像</div>
