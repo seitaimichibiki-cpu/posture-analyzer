@@ -90,11 +90,45 @@ def upload_to_cloudinary(file_path):
     if not (os.environ.get('CLOUDINARY_URL') or os.environ.get('CLOUDINARY_CLOUD_NAME')):
         return None
     try:
-        result = cloudinary.uploader.upload(file_path, folder="posture-reports")
+        # type="authenticated" にすることで、署名なしの直接アクセスを制限
+        result = cloudinary.uploader.upload(file_path, folder="posture-reports", type="authenticated")
         return result.get('secure_url')
     except Exception as e:
         print(f"Cloudinary upload failed: {e}")
         return None
+
+def get_signed_url(url):
+    """CloudinaryのURLから署名付きURLを生成する"""
+    if not url or not url.startswith('https://res.cloudinary.com'):
+        return url
+    
+    try:
+        # URLからpublic_idを抽出 (posture-reports/...)
+        parts = url.split('/')
+        version_idx = -1
+        for i, p in enumerate(parts):
+            if p.startswith('v') and p[1:].isdigit():
+                version_idx = i
+                break
+        
+        if version_idx != -1:
+            public_id_with_ext = "/".join(parts[version_idx+1:])
+            public_id = os.path.splitext(public_id_with_ext)[0]
+            
+            # 有効期限1時間の署名付きURLを生成
+            from cloudinary.utils import cloudinary_url
+            signed_url, _ = cloudinary_url(
+                public_id,
+                sign_url=True,
+                type="authenticated",
+                secure=True,
+                expires_at=int((datetime.utcnow() + timedelta(hours=1)).timestamp())
+            )
+            return signed_url
+    except Exception as e:
+        print(f"Failed to generate signed URL: {e}")
+    
+    return url
 
 def process_uploaded_image(file, target_path, max_size=2000):
     """
@@ -1118,10 +1152,14 @@ def analyze():
             db.session.commit()
             record_audit_log("ANALYSIS_EXECUTE", details=f"Posture analysis executed for patient_db_id: {patient.id} ({view_type})")
             
+            # 署名付きURLを生成
+            signed_report_url = get_signed_url(cloud_url) if cloud_url else url_for('static', filename=f'uploads/{os.path.basename(output_path)}')
+            signed_muscle_url = get_signed_url(muscle_cloud_url) if muscle_cloud_url else (url_for('static', filename=f'uploads/{os.path.basename(muscle_output_path)}') if muscle_output_path else None)
+
             return jsonify({
                 'success': True,
-                'report_url': cloud_url if cloud_url else url_for('static', filename=f'uploads/{os.path.basename(output_path)}'),
-                'muscle_report_url': muscle_cloud_url if muscle_cloud_url else (url_for('static', filename=f'uploads/{os.path.basename(muscle_output_path)}') if muscle_output_path else None),
+                'report_url': signed_report_url,
+                'muscle_report_url': signed_muscle_url,
                 'advice': record.advice
             })
         else:
@@ -1339,6 +1377,11 @@ def patient_detail(patient_db_id):
         user_id=current_user.id
     ).order_by(AnalysisRecord.created_at.desc()).all()
     
+    # 画像URLを署名付きに変換
+    for rec in records:
+        rec.image_url_signed = get_signed_url(rec.image_filename)
+        rec.input_url_signed = get_signed_url(rec.input_filename)
+        
     return render_template('patient_detail.html', patient=patient, records=records)
 
 @app.route('/record/memo/<int:record_id>', methods=['POST'])
@@ -1499,6 +1542,24 @@ def analyze_compare():
     except Exception as e:
         import traceback; print(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/uploads/<filename>')
+@login_required
+def protected_uploads(filename):
+    """アップロードされた画像を認可チェック付きで配信する"""
+    # ファイル名からレコードを特定
+    record = AnalysisRecord.query.filter(
+        (AnalysisRecord.image_filename.contains(filename)) | 
+        (AnalysisRecord.input_filename.contains(filename))
+    ).first()
+    
+    # レコードが存在し、かつ現在のユーザーの所有物であるか、または管理者の場合のみ許可
+    if record:
+        if record.user_id == current_user.id or current_user.is_admin:
+            return send_from_directory(UPLOAD_FOLDER, filename)
+    
+    # レコードが見つからない、または所有権がない場合
+    return abort(403)
 
 if __name__ == '__main__':
     # 開発環境での直接実行時
