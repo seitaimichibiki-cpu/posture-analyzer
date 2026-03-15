@@ -164,6 +164,8 @@ def init_and_migrate():
             db.create_all()
             
             inspector = sqlalchemy.inspect(db.engine)
+            is_postgres = db.engine.name == 'postgresql'
+            ts_type = 'TIMESTAMP' if is_postgres else 'DATETIME'
             
             # --- Userテーブルのマイグレーション ---
             user_cols = [c['name'] for c in inspector.get_columns('user')]
@@ -171,12 +173,12 @@ def init_and_migrate():
                 # パスワードリセット用
                 if 'reset_token' not in user_cols:
                     conn.execute(text('ALTER TABLE "user" ADD COLUMN reset_token VARCHAR(100)'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN reset_token_expiration DATETIME'))
+                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN reset_token_expiration {ts_type}'))
                 
                 # ログイン制限用
                 if 'failed_login_attempts' not in user_cols:
                     conn.execute(text('ALTER TABLE "user" ADD COLUMN failed_login_attempts INTEGER DEFAULT 0'))
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN locked_until DATETIME'))
+                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN locked_until {ts_type}'))
                 
                 # LINE連携用
                 if 'line_access_token' not in user_cols:
@@ -190,7 +192,7 @@ def init_and_migrate():
                 if 'otp_code' not in user_cols:
                     conn.execute(text('ALTER TABLE "user" ADD COLUMN otp_code VARCHAR(6)'))
                 if 'otp_expiry' not in user_cols:
-                    conn.execute(text('ALTER TABLE "user" ADD COLUMN otp_expiry DATETIME'))
+                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN otp_expiry {ts_type}'))
                 if 'is_2fa_enabled' not in user_cols:
                     conn.execute(text('ALTER TABLE "user" ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE'))
                 
@@ -205,7 +207,8 @@ def init_and_migrate():
                 
                 # Patientテーブルとの紐付け用カラム
                 if 'patient_db_id' not in record_cols:
-                    conn.execute(text('ALTER TABLE analysis_record ADD COLUMN patient_db_id INTEGER REFERENCES patient(id)'))
+                    # postgresの場合、外部キー制約の追加に注意が必要だが、ここではシンプルにカラム追加のみ
+                    conn.execute(text('ALTER TABLE analysis_record ADD COLUMN patient_db_id INTEGER'))
                 
                 # メモ
                 if 'memo' not in record_cols:
