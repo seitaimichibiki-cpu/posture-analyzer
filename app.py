@@ -216,6 +216,9 @@ def init_and_migrate():
             run_sql('ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP')
             run_sql('ALTER TABLE "user" ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE')
 
+            # 新規: AuditLogテーブルの作成
+            db.create_all() 
+
             print("INFO: マイグレーション(SQL実行)完了")
         except Exception as e:
             print(f"WARNING: マイグレーション実行中に想定外のエラーが発生しましたが、起動を継続します: {e}")
@@ -316,6 +319,31 @@ class AnalysisRecord(db.Model):
     advice = db.Column(db.Text, nullable=True)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    action = db.Column(db.String(100), nullable=False) # 'LOGIN', 'ANALYSIS', 'EXPORT', etc.
+    target_id = db.Column(db.String(100), nullable=True) # 対象のID (PatientID, RecordIDなど)
+    ip_address = db.Column(db.String(45), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+def record_audit_log(action, target_id=None, details=None):
+    try:
+        user_id = current_user.id if current_user.is_authenticated else None
+        ip = request.remote_addr
+        log = AuditLog(
+            user_id=user_id,
+            action=action,
+            target_id=str(target_id) if target_id else None,
+            ip_address=ip,
+            details=details
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"Error recording audit log: {e}")
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -429,6 +457,7 @@ def login():
                 # 通常ログイン
                 remember = request.form.get('remember') == 'true'
                 login_user(user, remember=remember)
+                record_audit_log("LOGIN", details=f"User {user.email} logged in successfully.")
                 return jsonify({'success': True, 'redirect': url_for('index')})
             else:
                 # 失敗時はカウントアップ
@@ -734,6 +763,8 @@ def admin_register_user():
     db.session.add(new_user)
     db.session.commit()
     
+    record_audit_log("ADMIN_REGISTER_USER", target_id=new_user.id, details=f"Admin registered new user: {email}")
+    
     return jsonify({'success': True})
 
 @app.route('/admin/export_db')
@@ -759,11 +790,12 @@ def admin_export_db():
             for r in AnalysisRecord.query.all()
         ]
     }
+    record_audit_log("EXPORT_JSON", details="Admin exported database as JSON")
     return jsonify(data)
 
 
 
-@app.route('/admin/export_csv')
+@app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -902,6 +934,7 @@ def admin_export_csv():
     response = make_response(output.getvalue())
     response.headers["Content-Disposition"] = f"attachment; filename=analysis_logs_{datetime.now().strftime('%Y%m%d')}.csv"
     response.headers["Content-type"] = "text/csv; charset=utf-8-sig"
+    record_audit_log("EXPORT_CSV", details="Admin exported analysis records as CSV")
     return response
 
 def generate_advice(record):
@@ -1029,6 +1062,7 @@ def analyze():
                 print(f"Failed to save numerical data: {e}")
             
             db.session.commit()
+            record_audit_log("ANALYSIS_EXECUTE", details=f"Posture analysis executed for patient_db_id: {patient.id} ({view_type})")
             
             return jsonify({
                 'success': True,
@@ -1373,6 +1407,7 @@ def analyze_compare():
             muscle_cloud_url = upload_to_cloudinary(muscle_output_path)
 
             db.session.commit()
+            record_audit_log("ANALYSIS_COMPARE_EXECUTE", details=f"Comparison analysis executed for patient_db_id: {patient.id}")
 
             if not report_cloud_url:
                 report_cloud_url = url_for('static', filename=f'uploads/{os.path.basename(output_path)}')
