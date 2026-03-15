@@ -217,6 +217,12 @@ def init_and_migrate():
             run_sql('ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP')
             run_sql('ALTER TABLE "user" ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE')
 
+            # Patientテーブル
+            run_sql('ALTER TABLE patient ADD COLUMN age INTEGER')
+            run_sql('ALTER TABLE patient ADD COLUMN gender VARCHAR(20)')
+            run_sql('ALTER TABLE patient ADD COLUMN weight FLOAT')
+            run_sql('ALTER TABLE patient ADD COLUMN chief_complaint TEXT')
+
             # 新規: AuditLogテーブルの作成
             db.create_all() 
 
@@ -280,6 +286,10 @@ class Patient(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     chart_number = db.Column(db.String(50), nullable=False) # カルテ番号
     name = db.Column(db.String(100), nullable=False) # 名前
+    age = db.Column(db.Integer, nullable=True) # 年齢
+    gender = db.Column(db.String(20), nullable=True) # 性別
+    weight = db.Column(db.Float, nullable=True) # 体重
+    chief_complaint = db.Column(db.Text, nullable=True) # 主訴
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # リレーション
@@ -1030,16 +1040,33 @@ def analyze():
     if file.filename == '' or not chart_number or not patient_name:
         return jsonify({'error': '画像、カルテ番号、名前はすべて必須です'}), 400
 
+    # 追加情報の取得
+    age = request.form.get('age')
+    gender = request.form.get('gender')
+    weight = request.form.get('weight')
+    chief_complaint = request.form.get('chief_complaint')
+
     # Patientの特定または作成
     patient = Patient.query.filter_by(user_id=current_user.id, chart_number=chart_number).first()
     if not patient:
-        patient = Patient(user_id=current_user.id, chart_number=chart_number, name=patient_name)
+        patient = Patient(
+            user_id=current_user.id, 
+            chart_number=chart_number, 
+            name=patient_name,
+            age=int(age) if age and age.isdigit() else None,
+            gender=gender,
+            weight=float(weight) if weight else None,
+            chief_complaint=chief_complaint
+        )
         db.session.add(patient)
         db.session.flush()
     else:
-        # 名前が空の場合のみ更新（必要に応じて）
-        if patient.name != patient_name:
-            patient.name = patient_name
+        # 既存顧客情報の更新
+        patient.name = patient_name
+        if age and age.isdigit(): patient.age = int(age)
+        if gender: patient.gender = gender
+        if weight: patient.weight = float(weight)
+        if chief_complaint: patient.chief_complaint = chief_complaint
 
     # ファイル名をユニークにする
     ext = os.path.splitext(file.filename)[1]
@@ -1367,15 +1394,32 @@ def analyze_compare():
     if not chart_number or not patient_name:
         return jsonify({'error': 'カルテ番号と名前は必須です'}), 400
 
+    # 追加情報の取得
+    age = request.form.get('age')
+    gender = request.form.get('gender')
+    weight = request.form.get('weight')
+    chief_complaint = request.form.get('chief_complaint')
+
     # Patientの特定または作成
     patient = Patient.query.filter_by(user_id=current_user.id, chart_number=chart_number).first()
     if not patient:
-        patient = Patient(user_id=current_user.id, chart_number=chart_number, name=patient_name)
+        patient = Patient(
+            user_id=current_user.id, 
+            chart_number=chart_number, 
+            name=patient_name,
+            age=int(age) if age and age.isdigit() else None,
+            gender=gender,
+            weight=float(weight) if weight else None,
+            chief_complaint=chief_complaint
+        )
         db.session.add(patient)
         db.session.flush()
     else:
-        if patient.name != patient_name:
-            patient.name = patient_name
+        patient.name = patient_name
+        if age and age.isdigit(): patient.age = int(age)
+        if gender: patient.gender = gender
+        if weight: patient.weight = float(weight)
+        if chief_complaint: patient.chief_complaint = chief_complaint
 
     # ユニークファイル名生成
     uid = uuid.uuid4().hex[:8]

@@ -112,6 +112,33 @@
                                 <input type="text" id="patient_name" placeholder="山田太郎" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid var(--accent); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box;" autocomplete="off" oninput="onInputPatient()">
                             </div>
                         </div>
+
+                        <!-- 追加：年齢・性別・体重 -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <div style="flex: 1;">
+                                <label for="patient_age" style="font-size: 13px; color: var(--text-muted); font-weight: bold; display: block; margin-bottom: 6px;">年齢</label>
+                                <input type="number" id="patient_age" placeholder="30" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; width: 100%; box-sizing: border-box; color: white;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="patient_gender" style="font-size: 13px; color: var(--text-muted); font-weight: bold; display: block; margin-bottom: 6px;">性別</label>
+                                <select id="patient_gender" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; width: 100%; box-sizing: border-box; color: lightgrey; appearance: none;">
+                                    <option value="" style="background: #1a1a1a;">未選択</option>
+                                    <option value="男性" style="background: #1a1a1a;">男性</option>
+                                    <option value="女性" style="background: #1a1a1a;">女性</option>
+                                    <option value="その他" style="background: #1a1a1a;">その他</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="patient_weight" style="font-size: 13px; color: var(--text-muted); font-weight: bold; display: block; margin-bottom: 6px;">体重(kg)</label>
+                                <input type="number" id="patient_weight" placeholder="60" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; width: 100%; box-sizing: border-box; color: white;">
+                            </div>
+                        </div>
+
+                        <!-- 追加：主訴 -->
+                        <div style="margin-bottom: 15px;">
+                            <label for="chief_complaint" style="font-size: 13px; color: var(--text-muted); font-weight: bold; display: block; margin-bottom: 6px;">主訴（お悩み）</label>
+                            <textarea id="chief_complaint" placeholder="例：右肩が上がらない。長年の腰痛。" class="form-control" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; width: 100%; box-sizing: border-box; color: white; min-height: 80px; resize: vertical;"></textarea>
+                        </div>
                         <div style="text-align: right;">
                             <a id="historyLink" href="javascript:void(0)" onclick="viewHistory()" style="font-size: 11px; color: var(--accent); text-decoration: none; opacity: 0.5; pointer-events: none;">📊 履歴を見る</a>
                         </div>
@@ -234,6 +261,10 @@
             const formData = new FormData();
             formData.append('chart_number', document.getElementById('chart_number').value);
             formData.append('patient_name', document.getElementById('patient_name').value);
+            formData.append('age', document.getElementById('patient_age').value);
+            formData.append('gender', document.getElementById('patient_gender').value);
+            formData.append('weight', document.getElementById('patient_weight').value);
+            formData.append('chief_complaint', document.getElementById('chief_complaint').value);
             
             try {
                 document.getElementById('loadingOverlay').style.display = 'flex';

@@ -238,7 +238,18 @@
             <div class="logo">整体院 導</div>
             <h1>顧客詳細: {{ patient.name }}</h1>
             <p class="subtitle">カルテ番号: {{ patient.chart_number }}</p>
-            <p class="subtitle">解析履歴と施術記録</p>
+            <div style="font-size: 14px; color: var(--text-muted); margin-top: 8px; display: flex; justify-content: center; gap: 15px;">
+                <span>年齢: {{ patient.age if patient.age else '未登録' }}</span>
+                <span>性別: {{ patient.gender if patient.gender else '未登録' }}</span>
+                <span>体重: {{ patient.weight if patient.weight else '--' }} kg</span>
+            </div>
+            {% if patient.chief_complaint %}
+            <div style="margin-top: 15px; background: rgba(0,198,255,0.05); border: 1px solid rgba(0,198,255,0.1); border-radius: 12px; padding: 12px; display: inline-block; max-width: 80%;">
+                <p style="font-size: 12px; color: var(--accent); font-weight: bold; margin-bottom: 4px; text-align: left;">📋 主訴</p>
+                <p style="font-size: 14px; line-height: 1.5; color: var(--text-bright); text-align: left; margin: 0;">{{ patient.chief_complaint }}</p>
+            </div>
+            {% endif %}
+            <p class="subtitle" style="margin-top: 15px;">解析履歴と施術記録</p>
             <div style="margin-top: 15px;">
                 <a href="{{ url_for('patients') }}" style="color: var(--text-muted); text-decoration: none; font-size: 13px;">← 顧客一覧へ戻る</a>
             </div>
