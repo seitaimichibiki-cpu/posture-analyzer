@@ -365,18 +365,34 @@ footer:hover { opacity: 1; }
 }
 
 /* Guide Overlay Styles */
-.preview-area { position: relative; overflow: hidden; }
 .guide-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     pointer-events: none;
     display: none;
-    z-index: 10;
+    z-index: 50; /* 画像より上に確実に表示 */
 }
-.guide-line { position: absolute; background: rgba(0, 255, 255, 0.4); }
-.v-center { left: 50%; top: 0; bottom: 0; width: 1.5px; background: rgba(0, 255, 255, 0.6); }
-.h-line-1 { top: 33%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
-.h-line-2 { top: 66%; left: 0; right: 0; height: 1px; border-top: 1px dashed rgba(255, 255, 255, 0.3); }
+.guide-line { 
+    position: absolute; 
+    background: #00f2fe; 
+    box-shadow: 0 0 5px rgba(0, 242, 254, 0.5);
+}
+.v-center { 
+    left: 50%; top: 0; bottom: 0; 
+    width: 2px; 
+    background: rgba(0, 242, 254, 0.8);
+    transform: translateX(-50%);
+}
+.h-line-1 { 
+    top: 33%; left: 0; right: 0; 
+    height: 1.5px; 
+    background: rgba(255, 255, 255, 0.4);
+}
+.h-line-2 { 
+    top: 66%; left: 0; right: 0; 
+    height: 1.5px; 
+    background: rgba(255, 255, 255, 0.4);
+}
 
 .guide-control {
     display: flex;
