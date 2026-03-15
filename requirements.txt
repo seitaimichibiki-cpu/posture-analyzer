@@ -9,7 +9,7 @@ gunicorn==23.0.0
 opencv-python-headless==4.13.0.92
 mediapipe==0.10.32
 pillow==11.3.0
-numpy==2.0.2
+numpy==1.26.4
 absl-py==2.3.1
 blinker==1.9.0
 click==8.1.8
