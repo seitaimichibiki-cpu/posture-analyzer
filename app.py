@@ -1,5 +1,6 @@
 import os
 import sys
+import functools
 import uuid
 import json
 from datetime import datetime, timedelta
@@ -349,6 +350,23 @@ def record_audit_log(action, target_id=None, details=None):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+def subscription_required(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if not current_user.is_active_member and not current_user.is_admin:
+            return redirect(url_for('payment_required'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/payment_required')
+@login_required
+def payment_required():
+    if current_user.is_active_member or current_user.is_admin:
+        return redirect(url_for('index'))
+    return render_template('payment_required.html')
+
 # 以前のハンドラは削除（統合済みのため）
 
 @app.route('/debug/db')
@@ -412,6 +430,7 @@ def health():
 # ─── ルート定義 ──────────────────────────────────────────────────────────────
 @app.route('/')
 @login_required
+@subscription_required
 def index():
     return render_template('index.html', user=current_user)
 
@@ -667,8 +686,10 @@ def api_patient_stats():
     
     return jsonify({'success': True, 'data': data})
 
-@app.route('/terms')
-def terms():
+@app.route('/patients')
+@login_required
+@subscription_required
+def patients():
     return render_template('terms.html')
 
 @app.route('/privacy')
@@ -767,7 +788,21 @@ def admin_register_user():
     
     return jsonify({'success': True})
 
-@app.route('/admin/export_db')
+@app.route('/admin/toggle/<int:user_id>', methods=['POST'])
+@login_required
+def admin_toggle_user(user_id):
+    if not current_user.is_admin:
+        abort(403)
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        return jsonify({'success': False, 'error': '自分自身は操作できません'}), 400
+    
+    user.is_active_member = not user.is_active_member
+    db.session.commit()
+    
+    record_audit_log("ADMIN_TOGGLE_USER_STATUS", target_id=user.id, details=f"Admin toggled user {user.email} active status to {user.is_active_member}")
+    
+    return jsonify({'success': True, 'new_status': user.is_active_member})
 @login_required
 def admin_export_db():
     if not current_user.is_admin:
@@ -991,6 +1026,8 @@ def generate_advice(record):
     return "\n".join(advices)
 
 @app.route('/analyze', methods=['POST'])
+@login_required
+@subscription_required
 def analyze():
     if 'image' not in request.files:
         return jsonify({'error': 'No image uploaded'}), 400
@@ -1324,6 +1361,7 @@ def delete_record(record_id):
 
 @app.route('/analyze_compare', methods=['POST'])
 @login_required
+@subscription_required
 @limiter.limit("5 per minute")
 def analyze_compare():
     if 'image_before' not in request.files or 'image_after' not in request.files:
