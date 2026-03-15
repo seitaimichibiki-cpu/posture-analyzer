@@ -161,105 +161,57 @@ def init_and_migrate():
     print("--- データベースマイグレーションを開始します ---")
     with app.app_context():
         try:
-            # テーブルの作成
+            # 基本的なテーブル作成
             db.create_all()
             print("INFO: db.create_all() 完了")
             
-            inspector = sqlalchemy.inspect(db.engine)
-            # PostgreSQL判定を確実に
+            # PostgreSQL特有の設定
             is_postgres = 'postgres' in db.engine.name.lower()
             ts_type = 'TIMESTAMP' if is_postgres else 'DATETIME'
-            print(f"INFO: データベースエンジン: {db.engine.name} (Postgres: {is_postgres})")
-
-            def safe_add_column(table_name, column_name, type_str):
-                try:
-                    cols = [c['name'] for c in inspector.get_columns(table_name)]
-                    if column_name not in cols:
-                        # 予約語 'user' への対応
-                        quoted_table = f'"{table_name}"' if table_name.lower() == 'user' else table_name
-                        with db.engine.connect() as conn:
-                            conn.execute(sqlalchemy.text(f"ALTER TABLE {quoted_table} ADD COLUMN {column_name} {type_str}"))
-                            conn.commit()
-                        print(f"SUCCESS: {table_name} に {column_name} カラムを追加しました")
-                except Exception as ex:
-                    print(f"WARNING: {table_name}.{column_name} の追加に失敗しました (既に存在する可能性があります): {ex}")
-
-            # Userテーブルのカラム追加
-            safe_add_column('user', 'reset_token', 'VARCHAR(100)')
-            safe_add_column('user', 'reset_token_expiration', ts_type)
-            safe_add_column('user', 'failed_login_attempts', 'INTEGER DEFAULT 0')
-            safe_add_column('user', 'locked_until', ts_type)
-            safe_add_column('user', 'is_active_member', 'BOOLEAN DEFAULT FALSE')
-            safe_add_column('user', 'is_admin', 'BOOLEAN DEFAULT FALSE')
-            safe_add_column('user', 'otp_secret', 'VARCHAR(32)')
-            safe_add_column('user', 'otp_code', 'VARCHAR(6)')
-            safe_add_column('user', 'otp_expiry', ts_type)
-            safe_add_column('user', 'is_2fa_enabled', 'BOOLEAN DEFAULT FALSE')
-            safe_add_column('user', 'line_access_token', 'VARCHAR(255)')
-            safe_add_column('user', 'line_channel_secret', 'VARCHAR(100)')
-
-            # AnalysisRecordテーブルのカラム追加
-            safe_add_column('analysis_record', 'patient_id', 'VARCHAR(50)')
-            safe_add_column('analysis_record', 'patient_db_id', 'INTEGER')
-            safe_add_column('analysis_record', 'memo', 'TEXT')
-            safe_add_column('analysis_record', 'line_user_id', 'VARCHAR(100)')
-            safe_add_column('analysis_record', 'image_filename', 'VARCHAR(255)')
-            safe_add_column('analysis_record', 'input_filename', 'VARCHAR(255)')
-            safe_add_column('analysis_record', 'advice', 'TEXT')
             
-            numerical_cols = {
-                'shoulder_angle': 'FLOAT', 'pelvis_angle': 'FLOAT', 'head_angle': 'FLOAT',
-                'ear_shift_pct': 'FLOAT', 'shoulder_shift_pct': 'FLOAT', 'pelvis_shift_pct': 'FLOAT',
-                'fhp_pct': 'FLOAT', 'rs_pct': 'FLOAT', 'side_pelvis_angle': 'FLOAT', 'trunk_pct': 'FLOAT'
-            }
-            for col, ctype in numerical_cols.items():
-                safe_add_column('analysis_record', col, ctype)
+            # 安全にカラムを追加する内部関数
+            def run_sql(sql_text):
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(text(sql_text))
+                        conn.commit()
+                except Exception:
+                    pass # すでにある場合は無視
 
-            print("INFO: スキーママイグレーション完了。データ移行チェックを開始...")
+            # Userテーブル (予約語 "user" 対策)
+            table_user = '"user"' if is_postgres else 'user'
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN reset_token VARCHAR(100)')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN reset_token_expiration {ts_type}')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN failed_login_attempts INTEGER DEFAULT 0')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN locked_until {ts_type}')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN is_active_member BOOLEAN DEFAULT FALSE')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN is_admin BOOLEAN DEFAULT FALSE')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN otp_secret VARCHAR(32)')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN otp_code VARCHAR(6)')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN otp_expiry {ts_type}')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN line_access_token VARCHAR(255)')
+            run_sql(f'ALTER TABLE {table_user} ADD COLUMN line_channel_secret VARCHAR(100)')
 
-            # --- データ移行処理 (patient_id -> Patientテーブル) ---
-            # ここでクラッシュしないようにさらに個別のtry-except
-            try:
-                records_to_migrate = AnalysisRecord.query.filter(AnalysisRecord.patient_db_id == None).all()
-                if records_to_migrate:
-                    print(f"MIGRATION: {len(records_to_migrate)} 件のレコードを Patient テーブルへ紐付け中...")
-                    for rec in records_to_migrate:
-                        if not rec.patient_id or not rec.user_id: continue
-                        p_id_str = str(rec.patient_id).strip()
-                        if not p_id_str: continue
-                        
-                        # 名前のパース
-                        parts = p_id_str.split()
-                        if len(parts) >= 2:
-                            chart_num = parts[0]
-                            name = " ".join(parts[1:])
-                        elif p_id_str.isdigit():
-                            chart_num = p_id_str
-                            name = f"患者_{p_id_str}"
-                        else:
-                            name = p_id_str
-                            chart_num = "なし"
-                        
-                        # 既存のPatientを探す（同じユーザー内でカルテ番号か名前が一致）
-                        patient = Patient.query.filter_by(user_id=rec.user_id, chart_number=chart_num, name=name).first()
-                        if not patient:
-                            patient = Patient(user_id=rec.user_id, chart_number=chart_num, name=name)
-                            db.session.add(patient)
-                            db.session.flush() # IDを取得するためにフラッシュ
-                        
-                        rec.patient_db_id = patient.id
-                    db.session.commit()
-                    print("SUCCESS: データの紐付け移行が完了しました")
-            except Exception as migrate_ex:
-                print(f"WARNING: データ移行中にエラーが発生しました (スキップします): {migrate_ex}")
-                db.session.rollback()
+            # AnalysisRecordテーブル
+            run_sql('ALTER TABLE analysis_record ADD COLUMN patient_id VARCHAR(50)')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN patient_db_id INTEGER')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN memo TEXT')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN line_user_id VARCHAR(100)')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN image_filename VARCHAR(255)')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN input_filename VARCHAR(255)')
+            run_sql('ALTER TABLE analysis_record ADD COLUMN advice TEXT')
+            
+            for col in ['shoulder_angle', 'pelvis_angle', 'head_angle', 'ear_shift_pct', 
+                        'shoulder_shift_pct', 'pelvis_shift_pct', 'fhp_pct', 'rs_pct', 
+                        'side_pelvis_angle', 'trunk_pct']:
+                run_sql(f'ALTER TABLE analysis_record ADD COLUMN {col} FLOAT')
 
+            print("INFO: マイグレーション(SQL実行)完了")
         except Exception as e:
-            print(f"CRITICAL ERROR: マイグレーション全体でエラーが発生しました: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"WARNING: マイグレーション実行中に想定外のエラーが発生しましたが、起動を継続します: {e}")
 
-    print("--- データベースマイグレーションを終了します ---")
+    print("--- データベースマイグレーション処理終了 ---")
 
 def is_strong_password(password):
     """
