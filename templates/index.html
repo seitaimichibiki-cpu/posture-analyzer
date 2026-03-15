@@ -61,19 +61,7 @@
                 </div>
 
                 <div id="singleModeArea" class="card photo-card">
-                    <div class="guide-control">
-                        <span class="guide-label">撮影ガイド表示</span>
-                        <label class="switch">
-                            <input type="checkbox" id="guideToggle" onchange="toggleGuide(this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
                     <div id="previewArea" class="preview-area">
-                        <div class="guide-overlay">
-                            <div class="guide-line v-center"></div>
-                            <div class="guide-line h-line-1"></div>
-                            <div class="guide-line h-line-2"></div>
-                        </div>
                         <div class="default-msg">
                             <span class="icon">📸</span>
                             <p>解析する写真を撮影または選択してください</p>
@@ -96,11 +84,6 @@
                     <div class="card photo-card comp-card">
                         <p class="comp-label">Before (以前)</p>
                         <div class="preview-area small" onclick="document.getElementById('fileCompB').click()">
-                            <div class="guide-overlay">
-                                <div class="guide-line v-center"></div>
-                                <div class="guide-line h-line-1"></div>
-                                <div class="guide-line h-line-2"></div>
-                            </div>
                             <div id="msgB" class="default-msg"><span>📸</span></div>
                             <img id="prevB" src="" style="display: none;">
                         </div>
@@ -109,11 +92,6 @@
                     <div class="card photo-card comp-card">
                         <p class="comp-label">After (今回)</p>
                         <div class="preview-area small" onclick="document.getElementById('fileCompA').click()">
-                            <div class="guide-overlay">
-                                <div class="guide-line v-center"></div>
-                                <div class="guide-line h-line-1"></div>
-                                <div class="guide-line h-line-2"></div>
-                            </div>
                             <div id="msgA" class="default-msg"><span>📸</span></div>
                             <img id="prevA" src="" style="display: none;">
                         </div>
@@ -462,15 +440,8 @@
             }
         }
 
-        function toggleGuide(show) {
-            document.querySelectorAll('.guide-overlay').forEach(el => el.style.display = show ? 'block' : 'none');
-            localStorage.setItem('show_guide', show);
-        }
-
         window.onload = () => {
-            const saved = localStorage.getItem('show_guide') === 'true';
-            document.getElementById('guideToggle').checked = saved;
-            toggleGuide(saved);
+            // Initialization if needed
         };
     </script>
     <footer style="margin-top: 60px; padding: 30px 20px; text-align: center; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted);">
