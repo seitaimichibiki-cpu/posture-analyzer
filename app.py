@@ -19,7 +19,6 @@ from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 register_heif_opener()
 import re
-import pyotp
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -189,12 +188,10 @@ def init_and_migrate():
             run_sql(f'ALTER TABLE {table_user} ADD COLUMN locked_until {ts_type}')
             run_sql(f'ALTER TABLE {table_user} ADD COLUMN is_active_member BOOLEAN DEFAULT FALSE')
             run_sql(f'ALTER TABLE {table_user} ADD COLUMN is_admin BOOLEAN DEFAULT FALSE')
-            run_sql(f'ALTER TABLE {table_user} ADD COLUMN otp_secret VARCHAR(32)')
-            run_sql(f'ALTER TABLE {table_user} ADD COLUMN otp_code VARCHAR(6)')
-            run_sql(f'ALTER TABLE {table_user} ADD COLUMN otp_expiry {ts_type}')
-            run_sql(f'ALTER TABLE {table_user} ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE')
             run_sql(f'ALTER TABLE {table_user} ADD COLUMN line_access_token VARCHAR(255)')
             run_sql(f'ALTER TABLE {table_user} ADD COLUMN line_channel_secret VARCHAR(100)')
+            
+            # 2FA関連は一旦保留（run_sqlを削除）
 
             # AnalysisRecordテーブル
             run_sql('ALTER TABLE analysis_record ADD COLUMN patient_id VARCHAR(50)')
@@ -216,21 +213,7 @@ def init_and_migrate():
 
     print("--- データベースマイグレーション処理終了 ---")
 
-def is_strong_password(password):
-    """
-    パスワード強度チェック:
-    8文字以上、英大文字・小文字・数字を各1文字以上含む
-    """
-    import re # reモジュールをここでインポート
-    if len(password) < 8:
-        return False
-    if not re.search(r"[a-z]", password):
-        return False
-    if not re.search(r"[A-Z]", password):
-        return False
-    if not re.search(r"[0-9]", password):
-        return False
-    return True
+# パスワードポリシー・2FA機能は保留
 
 # ─── データベース初期化・移行 ──────────────────────────────────────────────────
 class User(UserMixin, db.Model):
@@ -249,11 +232,6 @@ class User(UserMixin, db.Model):
     # ログイン試行制限用
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
-    # 二要素認証(OTP)用
-    otp_secret = db.Column(db.String(32), nullable=True)
-    otp_code = db.Column(db.String(6), nullable=True)
-    otp_expiry = db.Column(db.DateTime, nullable=True)
-    is_2fa_enabled = db.Column(db.Boolean, default=False)
 
 class LineUserMapping(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -401,30 +379,12 @@ def login():
                 # 成功時は失敗カウントをリセット
                 user.failed_login_attempts = 0
                 user.locked_until = None
-                
-                # 2FAが有効な場合
-                if user.is_2fa_enabled:
-                    import random
-                    otp = f"{random.randint(100000, 999999)}"
-                    user.otp_code = otp
-                    user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
-                    db.session.commit()
-                    
-                    # 認証コード送信
-                    msg = Message(
-                        "【整体院 導】ログイン認証コード",
-                        recipients=[user.email],
-                        body=f"認証コードは {otp} です。10分以内に力してください。"
-                    )
-                    mail.send(msg)
-                    
-                    return jsonify({'success': True, 'requires_2fa': True, 'user_id': user.id})
-                
                 db.session.commit()
+                
                 # 自動ログイン設定
                 remember = request.form.get('remember') == 'true'
                 login_user(user, remember=remember)
-                return jsonify({'success': True, 'requires_2fa': False})
+                return jsonify({'success': True, 'redirect': url_for('index')})
             else:
                 # 失敗時はカウントアップ
                 user.failed_login_attempts += 1
@@ -443,22 +403,7 @@ def login():
             return jsonify({'success': False, 'error': 'メールアドレスまたはパスワードが正しくありません。'}), 401
     return render_template('login.html')
 
-@app.route('/verify_otp', methods=['POST'])
-@limiter.limit("5 per minute")
-def verify_otp():
-    data = request.json
-    user_id = data.get('user_id')
-    code = data.get('code')
-    user = User.query.get(user_id)
-    
-    if user and user.otp_code == code and user.otp_expiry > datetime.utcnow():
-        user.otp_code = None
-        user.otp_expiry = None
-        db.session.commit()
-        login_user(user)
-        return jsonify({'success': True})
-    
-    return jsonify({'success': False, 'error': '認証コードが正しくないか、期限切れです。'}), 401
+
 
 @app.route('/logout')
 @login_required
@@ -694,8 +639,7 @@ def admin_register_user():
     if not email or not password:
         return jsonify({'success': False, 'error': 'メールアドレスとパスワードを入力してください。'}), 400
     
-    if not is_strong_password(password):
-        return jsonify({'success': False, 'error': 'パスワードが弱すぎます。8文字以上で英大文字・小文字・数字を組み合わせてください。'}), 400
+    # パスワード強度チェックは保留（指示により削除）
 
     if User.query.filter_by(email=email).first():
         return jsonify({'success': False, 'error': 'このメールアドレスは既に登録されています。'}), 400
@@ -737,12 +681,7 @@ def admin_export_db():
     }
     return jsonify(data)
 
-@app.route('/settings/toggle_2fa', methods=['POST'])
-@login_required
-def toggle_2fa():
-    current_user.is_2fa_enabled = not current_user.is_2fa_enabled
-    db.session.commit()
-    return jsonify({'success': True, 'is_2fa_enabled': current_user.is_2fa_enabled})
+
 
 @app.route('/admin/export_csv')
 def forgot_password():
