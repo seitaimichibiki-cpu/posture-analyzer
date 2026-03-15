@@ -202,8 +202,8 @@ class PoseAnalyzer:
         draw_midline_zoom(p_img, lm, w, h, x1, y1, scale)
 
         # 筋肉図
-        m_img = img_f.copy()
-        tensions = estimate_muscle_tension(lm, 'front')
+        m_img = img_final.copy()
+        tensions = estimate_muscle_tension(lm, 'front', w, h)
         draw_muscle_heatmap(m_img, lm, tensions, w, h, x1, y1, scale)
         draw_cog_indicator(m_img, lm, w, h, x1, y1, scale, 'front')
 
@@ -241,8 +241,8 @@ class PoseAnalyzer:
         for p in pts: cv2.circle(p_img, p, 7, (200,200,50), -1)
 
         # 筋肉図
-        m_img = img_f.copy()
-        tensions = estimate_muscle_tension(lm, 'side')
+        m_img = img_final.copy()
+        tensions = estimate_muscle_tension(lm, 'side', w, h)
         draw_muscle_heatmap(m_img, lm, tensions, w, h, x1, y1, scale)
         draw_cog_indicator(m_img, lm, w, h, x1, y1, scale, 'side')
 
@@ -329,7 +329,7 @@ class PoseAnalyzer:
 
         # 3b. 描画 (筋肉図)
         img_muscle = img_final.copy()
-        tensions = estimate_muscle_tension(lm, 'front')
+        tensions = estimate_muscle_tension(lm, 'front', w, h)
         draw_muscle_heatmap(img_muscle, lm, tensions, w, h, x1, y1, scale)
         draw_cog_indicator(img_muscle, lm, w, h, x1, y1, scale, 'front')
 
@@ -435,7 +435,7 @@ class PoseAnalyzer:
 
         # 3b. 描画 (筋肉図)
         img_muscle = img_final.copy()
-        tensions = estimate_muscle_tension(lm, 'side')
+        tensions = estimate_muscle_tension(lm, 'side', w, h)
         draw_muscle_heatmap(img_muscle, lm, tensions, w, h, x1, y1, scale)
         draw_cog_indicator(img_muscle, lm, w, h, x1, y1, scale, 'side')
 
@@ -817,28 +817,29 @@ def build_panel(items, risks, pw, ih):
 
     return pil2cv2(np.array(p))
 
-def estimate_muscle_tension(landmarks, view):
+def estimate_muscle_tension(landmarks, view, w, h):
     tensions = {}
     lm = landmarks
     if view == 'front':
-        head_a = abs(calc_angle(lm[7], lm[8], 100, 100)); head_s = abs(lm[0].x - (lm[11].x + lm[12].x)/2) * 50
+        head_a = abs(calc_angle(lm[7], lm[8], w, h)); head_s = abs(lm[0].x - (lm[11].x + lm[12].x)/2) * 50
         tensions['neck_stress'] = min(head_a * 0.1 + head_s, 1.0)
-        shldr_a = abs(calc_angle(lm[11], lm[12], 100, 100))
+        shldr_a = abs(calc_angle(lm[11], lm[12], w, h))
         tensions['trapezius_l'] = min(shldr_a * 0.2, 1.0) if lm[11].y > lm[12].y else 0.1
         tensions['trapezius_r'] = min(shldr_a * 0.2, 1.0) if lm[12].y > lm[11].y else 0.1
-        pel_a = abs(calc_angle(lm[23], lm[24], 100, 100)); pel_s = abs(lm[23].x + lm[24].x - lm[11].x - lm[12].x) * 20
+        pel_a = abs(calc_angle(lm[23], lm[24], w, h)); pel_s = abs(lm[23].x + lm[24].x - lm[11].x - lm[12].x) * 20
         tensions['erector_spinae_l'] = min(pel_a * 0.15 + pel_s, 0.9); tensions['erector_spinae_r'] = min(pel_a * 0.15 + pel_s, 0.9)
     else:
-        fhp = abs(lm[0].x - lm[11].x) * 50; tensions['neck_extensor'] = min(fhp * 0.8, 1.0)
-        trunk_s = abs(lm[11].x - lm[23].x) * 50; tensions['lumbar_extensor'] = min(trunk_s * 0.7, 0.9)
-        quad_s = abs(lm[23].x - lm[25].x) * 50; tensions['quads'] = min(quad_s * 0.5, 0.8)
+        # 側面: 骨盤幅などの相対的なリファレンスがないため w/h の重み付けを強める
+        fhp = abs(lm[0].x - lm[11].x) * (w / 10); tensions['neck_extensor'] = min(fhp * 0.4, 1.0)
+        trunk_s = abs(lm[11].x - lm[23].x) * (w / 10); tensions['lumbar_extensor'] = min(trunk_s * 0.3, 0.9)
+        quad_s = abs(lm[23].x - lm[25].x) * (w / 10); tensions['quads'] = min(quad_s * 0.2, 0.8)
     return tensions
 
 def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
     overlay = img.copy(); lm = landmarks
     def draw_tension_blob(point_lm, tension, color=(0, 0, 255), label=""):
-        if tension < 0.3: return
-        p = px_zoom(point_lm, w, h, x1, y1, scale); radius = int(30 * tension * scale); alpha = int(150 * tension)
+        if tension < 0.1: return   # 閾値を 0.3 -> 0.1 に緩和
+        p = px_zoom(point_lm, w, h, x1, y1, scale); radius = int(45 * tension * scale); alpha = int(180 * tension)
         cv2.circle(overlay, p, radius, color, -1)
         if label: cv2.putText(img, label, (p[0]+15, p[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
     for part, t in tensions.items():

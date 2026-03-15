@@ -1498,10 +1498,13 @@ def analyze_compare():
             log = AnalysisLog(user_id=current_user.id if current_user.is_authenticated else None, view_type='compare')
             db.session.add(log)
             
-            def save_comp_data(items, prefix_type):
+            # レポート画像をCloudinaryへ1回だけアップロード
+            report_cloud_url = upload_to_cloudinary(output_path)
+            muscle_cloud_url = upload_to_cloudinary(muscle_output_path)
+
+            def save_comp_data(items, prefix_type, report_url):
                 # items is a list of {"n": name, "v": value, "s": score}
                 d = {it['n']: it['v'] for it in items}
-                c_url = upload_to_cloudinary(output_path)
                 source_path = path_b if prefix_type == 'before' else path_a
                 i_url = upload_to_cloudinary(source_path)
 
@@ -1510,29 +1513,26 @@ def analyze_compare():
                     patient_db_id=patient.id,
                     patient_id=f"{chart_number} {patient_name}",
                     view_type=f"{view}_{prefix_type}",
-                    shoulder_angle=d.get('肩傾き') or d.get('ラウンド肩'),
-                    pelvis_angle=d.get('骨盤傾き') or d.get('骨盤前後傾'),
+                    shoulder_angle=d.get('肩傾き') if d.get('肩傾き') is not None else d.get('ラウンド肩'),
+                    pelvis_angle=d.get('骨盤傾き') if d.get('骨盤傾き') is not None else d.get('骨盤前後傾'),
                     head_angle=d.get('頭部傾き'),
                     ear_shift_pct=d.get('頭部ズレ'),
                     shoulder_shift_pct=d.get('肩部ズレ'),
                     pelvis_shift_pct=d.get('骨盤ズレ'),
                     fhp_pct=d.get('FHP'),
                     rs_pct=d.get('ラウンド肩'),
-                    trunk_pct=d.get('体幹領域') or d.get('体幹ライン'),
-                    image_filename=c_url if c_url else os.path.basename(output_path),
+                    trunk_pct=d.get('体幹領域') if d.get('体幹領域') is not None else d.get('体幹ライン'),
+                    image_filename=report_url if report_url else os.path.basename(output_path),
                     input_filename=i_url if i_url else (os.path.basename(path_b) if prefix_type == 'before' else os.path.basename(path_a))
                 )
                 record.advice = generate_advice(record)
                 db.session.add(record)
 
             try:
-                save_comp_data(data['before'], 'before')
-                save_comp_data(data['after'], 'after')
+                save_comp_data(data['before'], 'before', report_cloud_url)
+                save_comp_data(data['after'], 'after', report_cloud_url)
             except Exception as e:
-                print(f"Failed to save comparison numerical data: {e}")
-
-            report_cloud_url = upload_to_cloudinary(output_path)
-            muscle_cloud_url = upload_to_cloudinary(muscle_output_path)
+                print(f"Failed to save comparison numerical data: {traceback.format_exc()}")
 
             db.session.commit()
             record_audit_log("ANALYSIS_COMPARE_EXECUTE", details=f"Comparison analysis executed for patient_db_id: {patient.id}")

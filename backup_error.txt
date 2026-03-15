@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/python3: can't open file '/Users/ishikawagai/Desktop/整体院導/web_app/backup_to_obsidian.py': [Errno 1] Operation not permitted
