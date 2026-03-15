@@ -164,8 +164,12 @@ def init_and_migrate():
             db.create_all()
             print("INFO: db.create_all() 完了")
             
-            # PostgreSQL特有の設定
-            is_postgres = 'postgres' in db.engine.name.lower()
+            # PostgreSQL判定を確実に
+            try:
+                dialect_name = db.engine.dialect.name
+            except:
+                dialect_name = 'sqlite'
+            is_postgres = 'postgres' in dialect_name.lower()
             ts_type = 'TIMESTAMP' if is_postgres else 'DATETIME'
             
             # 安全にカラムを追加する内部関数
@@ -336,6 +340,20 @@ def debug_db():
         })
     except Exception as e:
         return str(e), 500
+
+# 最初のアクセス時に一度だけマイグレーションを実行
+_migration_done = False
+@app.before_request
+def run_migration_once():
+    global _migration_done
+    if not _migration_done:
+        # 非同期的に実行するか、ここで短時間で終わらせる
+        # ここでは単純に呼び出し、フラグを立てる
+        try:
+            init_and_migrate()
+        except:
+            pass
+        _migration_done = True
 
 # ─── 姿勢解析設定 ────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1363,13 +1381,5 @@ if __name__ == '__main__':
         pass
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port)
-else:
-    # Render (Gunicorn等) での読み込み時
-    # 起動直後に一度だけマイグレーションを試みる（エラーでアプリを止めない）
-    try:
-        with app.app_context():
-            init_and_migrate()
-    except Exception as e:
-        print(f"Startup background migration failed (Normal for some DB states): {e}")
 
 print("--- アプリケーションの準備が整いました ---")
