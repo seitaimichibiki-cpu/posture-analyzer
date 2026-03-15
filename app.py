@@ -452,13 +452,14 @@ _migration_done = False
 def run_migration_once():
     global _migration_done
     if not _migration_done:
-        # 非同期的に実行するか、ここで短時間で終わらせる
-        # ここでは単純に呼び出し、フラグを立てる
+        print("DEBUG: Executing first-request migration...")
         try:
             init_and_migrate()
-        except:
-            pass
-        _migration_done = True
+            _migration_done = True
+            print("DEBUG: Migration finished successfully.")
+        except Exception as e:
+            print(f"ERROR: Migration failed: {e}")
+            # 失敗してもフラグは立てない（リトライさせる）か、あるいはログを出す
 
 # ─── 姿勢解析設定 ────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -684,13 +685,13 @@ def api_search_patients():
 @login_required
 def api_recent_patients():
     """最近解析した患者リストを20件取得"""
-    # Patientテーブルと紐付いた最新レコードを取得
+    # Patientテーブルと紐付いた最新レコードを取得 (LEFT JOIN)
     results = db.session.query(
         Patient.id,
         Patient.chart_number,
         Patient.name,
         db.func.max(AnalysisRecord.created_at).label('last_date')
-    ).join(AnalysisRecord, Patient.id == AnalysisRecord.patient_db_id)\
+    ).outerjoin(AnalysisRecord, Patient.id == AnalysisRecord.patient_db_id)\
      .filter(Patient.user_id == current_user.id)\
      .group_by(Patient.id)\
      .order_by(db.text('last_date DESC'))\
@@ -1115,6 +1116,7 @@ def analyze():
         if gender: patient.gender = gender
         if weight: patient.weight = float(weight)
         if chief_complaint: patient.chief_complaint = chief_complaint
+        db.session.add(patient)
 
     # ファイル名をユニークにする (常に .jpg として扱う)
     uid = uuid.uuid4()
@@ -1349,11 +1351,11 @@ def delete_line_mapping(mapping_id):
 @login_required
 @subscription_required
 def patients():
-    # Patientテーブルをベースに最新来店日を取得
+    # Patientテーブルをベースに最新来店日を取得 (LEFT JOIN)
     results = db.session.query(
         Patient,
         db.func.max(AnalysisRecord.created_at).label('last_visit')
-    ).join(AnalysisRecord, Patient.id == AnalysisRecord.patient_db_id)\
+    ).outerjoin(AnalysisRecord, Patient.id == AnalysisRecord.patient_db_id)\
      .filter(Patient.user_id == current_user.id)\
      .group_by(Patient.id).all()
     
@@ -1476,6 +1478,7 @@ def analyze_compare():
         if gender: patient.gender = gender
         if weight: patient.weight = float(weight)
         if chief_complaint: patient.chief_complaint = chief_complaint
+        db.session.add(patient)
 
     # ユニークファイル名生成 (常に .jpg として扱う)
     uid = uuid.uuid4().hex[:8]

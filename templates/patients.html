@@ -102,7 +102,7 @@
                         <div class="patient-info">
                             <h3>{{ patient.name }}</h3>
                             <p>カルテ番号: {{ patient.chart_number }}</p>
-                            <p>最終解析日: {{ patient.last_visit.strftime('%Y/%m/%d %H:%M') }}</p>
+                            <p>最終解析日: {{ patient.last_visit.strftime('%Y/%m/%d %H:%M') if patient.last_visit else '解析データなし' }}</p>
                         </div>
                         <div class="patient-arrow" style="color: var(--accent); font-weight: bold;">→</div>
                     </a>
