@@ -534,14 +534,7 @@ class PoseAnalyzer:
         print(f"  ✅ 保存: {os.path.basename(output_path)}")
         return True
 
-# ─── 旧関数互換レイヤー（シングル実行用） ────────────────────────────────────
-def analyze_posture(image_path, model_path, output_path):
-    engine = PoseAnalyzer(model_path)
-    return engine.analyze(image_path, output_path, 'front')
-
-def analyze_posture_side(image_path, model_path, output_path):
-    engine = PoseAnalyzer(model_path)
-    return engine.analyze(image_path, output_path, 'side')
+# PoseAnalyzerクラス内で完結しているため、旧関数は削除
 
 # ─── 共通ヘルパー (既存のものをコピー) ───────────────────────────────────────
 def calc_angle(p1, p2, w, h):
@@ -616,14 +609,13 @@ def _calc_total_score(items, risks):
         deduction += d
 
     # 2. リスク項目（推定）の減点（こちらは重要度を下げる）
+    # 2. リスク項目（推定）の減点（こちらは重要度を下げる）
     # リスク項目は判定文字(◎○△×)に応じたマイルドな減点
     R_MAP = {"◎": 0, "○": 0.5, "△": 2, "×": 5}
     for r in risks:
         deduction += R_MAP.get(r[1], 0.5)
 
     # 3. 算出した点数を100点から引く
-    # 計測項目数に応じて最大減点を正規化（項目が多いほど1項目の影響を調整）
-    # 現在 4〜6項目 + リスク数項目 なので、そのまま合算してバランスが良い
     return int(max(0, 100 - deduction))
 
 def direction(a): return "右下がり" if a >= 0 else "左下がり"
@@ -654,68 +646,22 @@ def draw_meas_line_zoom(img, lm1, lm2, sc, w, h, x1, y1, scale):
     c = SCORE_BGR[sc]
     p1 = px_zoom(lm1, w, h, x1, y1, scale)
     p2 = px_zoom(lm2, w, h, x1, y1, scale)
-    # 線を細く（2px）に変更して精密感を出す
     cv2.line(img, p1, p2, c, 2, cv2.LINE_AA)
     cv2.circle(img, p1, 6, c, -1); cv2.circle(img, p2, 6, c, -1)
 
-def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
-    lx_orig = (lm[27].x + lm[28].x) / 2 * w
-    lx = int((lx_orig - x1) * scale)
-    py_top = int((lm[0].y * h - h * 0.1 - y1) * scale)
-    py_bot = int((max(lm[27].y, lm[28].y) * h + h * 0.02 - y1) * scale)
-    ih = img.shape[0]
-    for y in range(max(py_top, 10), min(py_bot, ih), 20):
-        cv2.line(img, (lx, y), (lx, min(y+10, py_bot)), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
-    
-    pts_lm = [lm[0], lm[11], lm[23], lm[27]] # 適当な代表点
-    # 現実に即してランドマーク中点を計算
-    pts = [
-        midpoint(px_zoom(lm[7],w,h,x1,y1,scale),  px_zoom(lm[8],w,h,x1,y1,scale)),
-        midpoint(px_zoom(lm[11],w,h,x1,y1,scale), px_zoom(lm[12],w,h,x1,y1,scale)),
-        midpoint(px_zoom(lm[23],w,h,x1,y1,scale), px_zoom(lm[24],w,h,x1,y1,scale)),
-        (lx, int((max(lm[27].y, lm[28].y)*h - y1)*scale))
-    ]
-    for pt in pts:
-        cv2.circle(img, pt, 6, MIDLINE_COL_BGR, -1)
-        cv2.circle(img, pt, 8, (255, 255, 255), 1)
-        if pt[0] != lx:
-            cv2.arrowedLine(img, (lx, pt[1]), (pt[0], pt[1]), MIDLINE_COL_BGR, 2, cv2.LINE_AA, tipLength=0.2)
-
 def calc_body_risks(sc_h, sc_s, sc_p, ts_sc, s_a, p_a):
-    pd = "右側" if p_a >= 0 else "左側"; sd = "右肩" if s_a >= 0 else "左肩"
+    pd = "右側" if p_a >= 0 else "左側"
     risks = []
     if sc_p == "×" or ts_sc == "×": risks.append(("足", "△", f"骨盤の傾きで左右バランスが崩れています。{pd}への負担が大きい状態です。"))
     else: risks.append(("足", "◎", "体重分配は良好です。"))
     if sc_p == "×" or ts_sc in ("△", "×"): risks.append(("膝", "△", f"{pd}の膝にストレスが偏りやすい状態です。"))
     else: risks.append(("膝", "◎", "膝へのバランスは良好です。"))
-    if sc_p == "×": risks.append(("股関節", "×", f"{pd}の股関節痛のリスクが高いdef calc_future_risks(scores, view='front'):
-    """姿勢スコアの分布から、視点（正面・側面）に応じた将来のリスク予測を算出"""
-    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
-    total_val = sum(weights.get(s, 0) for s in scores)
-    max_val = len(scores) * 6
-    if max_val == 0: base_risk = 0
-    else: base_risk = (total_val / max_val) * 100
     
-    if view == 'front':
-        # 正面視：左右の歪みに関連
-        risks = [
-            {"name": "側弯・背骨の歪み", "val": min(base_risk * 1.2 + 10, 99), "desc": "左右の重心ズレによる脊椎への不均等なストレス"},
-            {"name": "肩凝り・片頭痛", "val": min(base_risk * 1.1 + 5, 99), "desc": "肩ラインの不均衡による頸部筋肉への持続的緊張"},
-            {"name": "骨盤変形・下肢症状", "val": min(base_risk * 1.0 + 8, 99), "desc": "骨盤の傾きが膝や足首の関節に及ぼす影響"},
-            {"name": "内臓位置の不均衡", "val": min(base_risk * 0.8 + 5, 99), "desc": "体幹の傾きによる腹部空間の圧縮と血流低下"},
-            {"name": "自立神経・不眠", "val": min(base_risk * 0.9 + 12, 99), "desc": "首の横倒れによる自律神経への影響と疲労蓄積"}
-        ]
-    else:
-        # 側面視：前後の歪みに関連
-        risks = [
-            {"name": "猫背・円背の定着", "val": min(base_risk * 1.1 + 10, 99), "desc": "前傾姿勢の継続による背中の曲がりの固定化"},
-            {"name": "ストレートネック", "val": min(base_risk * 1.3 + 8, 99), "desc": "前方頭位による頸部への負担と脳血流への影響"},
-            {"name": "反り腰・慢性腰痛", "val": min(base_risk * 1.2 + 12, 99), "desc": "骨盤の前傾による腰椎骨への持続的な摩耗"},
-            {"name": "呼吸機能の低下", "val": min(base_risk * 0.9 + 5, 99), "desc": "巻き肩による胸郭の閉鎖と呼吸の質の低下"},
-            {"name": "脊椎の変性", "val": min(base_risk * 1.0 + 15, 99), "desc": "重力による特定椎間板への集中荷重と骨棘形成"}
-        ]
-    return risks
-("首", "×", "頸椎に偏った負荷がかかり、頭痛やしびれのリスクがあります。"))
+    if sc_p == "×": risks.append(("股関節", "×", f"{pd}の股関節痛のリスクが高い状態です。"))
+    elif sc_p == "△": risks.append(("股関節", "△", f"骨盤の不安定性から{pd}の股関節に負担がかかりやすいです。"))
+    else: risks.append(("股関節", "◎", "股関節の左右バランスは良好です。"))
+    
+    if sc_h == "×": risks.append(("首", "×", "頸椎に偏った負荷がかかり、頭痛やしびれのリスクがあります。"))
     elif sc_h == "△": risks.append(("首", "△", "首の筋肉に左右差が生じやすく、疲れやすい状態です。"))
     else: risks.append(("首", "◎", "首への負荷は左右均等です。"))
     return risks
@@ -734,8 +680,55 @@ def calc_side_risks(fhp_sc, rs_sc, trk_sc, pel_sc, fval, rval):
     else: risks.append(("全身", "◎", "全身の垂直バランスは良好です。"))
     return risks
 
-def _calc_risk_row_h(msg): return 38 if len(msg) > MAX_CHARS else 24
-MAX_CHARS = 28
+def calc_future_risks(scores, view='front'):
+    """姿勢スコアの分布から、視点（正面・側面）に応じた将来のリスク予測を算出"""
+    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
+    total_val = sum(weights.get(s, 0) for s in scores)
+    max_val = len(scores) * 6
+    if max_val == 0: base_risk = 0
+    else: base_risk = (total_val / max_val) * 100
+    
+    if view == 'front':
+        # 正面視：左右の歪みに関連
+        risks = [
+            {"name": "側弯・背骨の歪み", "val": min(base_risk * 1.2 + 10, 99), "desc": "左右の重心ズレによる脊椎への不均等なストレス"},
+            {"name": "肩凝り・片頭痛", "val": min(base_risk * 1.1 + 5, 99), "desc": "肩ラインの不均衡による頸部筋肉への持続的緊張"},
+            {"name": "骨盤変形・下肢症状", "val": min(base_risk * 1.0 + 8, 99), "desc": "骨盤の傾きが膝や足首の関節に及ぼす影響"},
+            {"name": "内臓位置の不均衡", "val": min(base_risk * 0.8 + 5, 99), "desc": "体幹の傾きによる腹部空間の圧縮と血流低下"},
+            {"name": "自律神経・不眠のリスク", "val": min(base_risk * 0.9 + 12, 99), "desc": "首の横倒れや緊張による神経系への影響"}
+        ]
+    else:
+        # 側面視：前後の歪みに関連
+        risks = [
+            {"name": "ストレートネック", "val": min(base_risk * 1.3 + 8, 99), "desc": "前方頭位による頸部への甚大な負担"},
+            {"name": "猫背・円背の定着", "val": min(base_risk * 1.1 + 10, 99), "desc": "前傾姿勢の継続による胸郭の閉鎖と背中の曲がり"},
+            {"name": "反り腰・慢性腰痛", "val": min(base_risk * 1.2 + 12, 99), "desc": "骨盤の前傾による腰椎椎間板への持続的な損傷"},
+            {"name": "膝関節・足裏の変形", "val": min(base_risk * 1.0 + 15, 99), "desc": "重心の前後ズレによる下肢関節の過伸展リスク"},
+            {"name": "呼吸機能・代謝の低下", "val": min(base_risk * 0.9 + 5, 99), "desc": "巻き肩や前かがみによる肺活量の減少と血行不良"}
+        ]
+    return risks
+
+def draw_midline_zoom(img, lm, w, h, x1, y1, scale):
+    lx_orig = (lm[27].x + lm[28].x) / 2 * w
+    lx = int((lx_orig - x1) * scale)
+    py_top = int((lm[0].y * h - h * 0.1 - y1) * scale)
+    py_bot = int((max(lm[27].y, lm[28].y) * h + h * 0.02 - y1) * scale)
+    ih = img.shape[0]
+    for y in range(max(py_top, 10), min(py_bot, ih), 20):
+        cv2.line(img, (lx, y), (lx, min(y+10, py_bot)), MIDLINE_COL_BGR, 2, cv2.LINE_AA)
+    
+    pts = [
+        midpoint(px_zoom(lm[7],w,h,x1,y1,scale),  px_zoom(lm[8],w,h,x1,y1,scale)),
+        midpoint(px_zoom(lm[11],w,h,x1,y1,scale), px_zoom(lm[12],w,h,x1,y1,scale)),
+        midpoint(px_zoom(lm[23],w,h,x1,y1,scale), px_zoom(lm[24],w,h,x1,y1,scale)),
+        (lx, int((max(lm[27].y, lm[28].y)*h - y1)*scale))
+    ]
+    for pt in pts:
+        cv2.circle(img, pt, 6, MIDLINE_COL_BGR, -1)
+        cv2.circle(img, pt, 8, (255, 255, 255), 1)
+        if pt[0] != lx:
+            cv2.arrowedLine(img, (lx, pt[1]), (pt[0], pt[1]), MIDLINE_COL_BGR, 2, cv2.LINE_AA, tipLength=0.2)
+
 def _draw_legend_block(draw, x, y, view):
     """画像の下に凡例と出典を描画するヘルパー"""
     fH, fS, fXS, fXXS = get_font(22), get_font(16), get_font(14), get_font(13)
@@ -784,36 +777,7 @@ def _draw_legend_block(draw, x, y, view):
 def _measure_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 750, 1600)
 def _measure_side_panel_height(items, risks): return max(100 + len(items)*72 + len(risks)*40 + 750, 1600)
 
-def calc_future_risks(scores, view='front'):
-    """姿勢スコアの分布から、視点（正面・側面）に応じた将来のリスク予測を算出"""
-    weights = {"◎": 0, "○": 1, "△": 3, "×": 6}
-    total_val = sum(weights.get(s, 0) for s in scores)
-    max_val = len(scores) * 6
-    if max_val == 0: base_risk = 0
-    else: base_risk = (total_val / max_val) * 100
-    
-    if view == 'front':
-        # 正面視：左右の歪みに関連
-        risks = [
-            {"name": "側弯・背骨の歪み", "val": min(base_risk * 1.2 + 10, 99), "desc": "左右の重心ズレによる脊椎への不均等なストレス"},
-            {"name": "肩凝り・片頭痛", "val": min(base_risk * 1.1 + 5, 99), "desc": "肩ラインの不均衡による頸部筋肉への持続的緊張"},
-            {"name": "骨盤変形・下肢症状", "val": min(base_risk * 1.0 + 8, 99), "desc": "骨盤の傾きが膝や足首の関節に及ぼす影響"},
-            {"name": "内臓位置の不均衡", "val": min(base_risk * 0.8 + 5, 99), "desc": "体幹の傾きによる腹部空間の圧縮と血流低下"},
-            {"name": "自立神経・不眠", "val": min(base_risk * 0.9 + 12, 99), "desc": "首の横倒れによる自律神経への影響と疲労蓄積"}
-        ]
-    else:
-        # 側面視：前後の歪みに関連
-        risks = [
-            {"name": "猫背・円背の定着", "val": min(base_risk * 1.1 + 10, 99), "desc": "前傾姿勢の継続による背中の曲がりの固定化"},
-            {"name": "ストレートネック", "val": min(base_risk * 1.3 + 8, 99), "desc": "前方頭位による頸部への負担と脳血流への影響"},
-            {"name": "反り腰・慢性腰痛", "val": min(base_risk * 1.2 + 12, 99), "desc": "骨盤の前傾による腰椎骨への持続的な摩耗"},
-            {"name": "呼吸機能の低下", "val": min(base_risk * 0.9 + 5, 99), "desc": "巻き肩による胸郭の閉鎖と呼吸の質の低下"},
-            {"name": "脊椎の変性", "val": min(base_risk * 1.0 + 15, 99), "desc": "重力による特定椎間板への集中荷重と骨棘形成"}
-        ]
-    return risks
-
 def build_panel(items, risks, pw, ih):
-    # スコアリスト作成
     i_scores = [it["score"] for it in items]
     r_scores = [r[1] for r in risks]
     f_risks = calc_future_risks(i_scores + r_scores, view='front')
@@ -823,306 +787,153 @@ def build_panel(items, risks, pw, ih):
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：正面観察 ]", fH, WHITE)
     
-    # ─── 総合スコア表示 ─────
-    y = 65
-    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
-    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
+    y = 65; dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150)); draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
     score_col = YELLOW if total_pt > 70 else (255,100,100)
-    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col)
-    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
+    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col); draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
     
     y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "正面理想：各ライン水平 0.0°　正中線偏位 0%", fXS, GREEN_IDEAL); y += 38
-    
-    # 既存の計測結果セクション
     draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
         draw_text(dr, (18,y+8), item["name"], fB, WHITE); bx = pw-50; dr.ellipse([(bx,y+6),(bx+24,y+30)], fill=col); draw_text(dr, (bx+4,y+10), item["score"], fXS, (10,10,10))
         draw_text(dr, (18,y+36), f"理想: {item['normal']:+.1f}°", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']:+.1f}°", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']:.1f}° ({item['direction']})", fS, col); y += 72
         
-    # 既存のリスク予測
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 25
     for pt, sc, msg in risks:
-        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8
-        draw_text(dr, (18,y), f"【{pt}】", fS, WHITE)
-        # スコアアイコンの位置調整（右にシフトして重なり防止）と描画品質向上
-        bx = 125
-        dr.ellipse([(bx, y), (bx+22, y+22)], fill=col, outline=(30,30,50), width=1)
-        draw_text(dr, (bx+4, y+2), sc, fXXS, (10,10,10))
-        
+        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 125; dr.ellipse([(bx, y), (bx+22, y+22)], fill=col, outline=(30,30,50), width=1); draw_text(dr, (bx+4, y+2), sc, fXXS, (10,10,10))
         rem = msg; wrp = []
-        while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
+        while len(rem) > 28: wrp.append(rem[:28]); rem = rem[28:]
         if rem: wrp.append(rem)
-        # 本文の位置もアイコンに合わせてシフト
         for i, t in enumerate(wrp): draw_text(dr, (bx + 40, y + i*16), t, fXXS, col)
         y += 45
 
-    # 🆕 生活習慣病予測セクション（改善されたレイアウト）
     fr_box_h = 48 + 92 * len(f_risks) + 20
     y += 18; dr.rectangle([(10,y),(pw-10,y+fr_box_h)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
     for fr in f_risks:
-        # 項目の名称を一行目に配置
-        draw_text(dr, (25,y), fr["name"], fB, WHITE)
-        y += 28
-        
-        # ゲージ描画（二行目：左寄せ）
-        bar_x1, bar_x2 = 25, pw - 85
-        dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
-        v_f = float(fr.get("val", 0))
-        gw = int((bar_x2 - bar_x1) * (v_f / 100))
-        gcol = (255, 60, 60) if v_f > 60 else (255, 180, 40)
-        dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol)
-        # パーセンテージ描画（ゲージの右隣）
-        draw_text(dr, (bar_x2 + 10, y - 4), f"{v_f:.0f}%", fS, gcol)
-        y += 22
-        
-        # 三行目：説明文
-        draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY)
-        y += 42 # 次の項目へのマージン
+        draw_text(dr, (25,y), fr["name"], fB, WHITE); y += 28
+        bar_x1, bar_x2 = 25, pw - 85; dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
+        v_f = float(fr.get("val", 0)); gw = int((bar_x2 - bar_x1) * (v_f / 100)); gcol = (255, 60, 60) if v_f > 60 else (255, 180, 40)
+        dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol); draw_text(dr, (bar_x2 + 10, y - 4), f"{v_f:.0f}%", fS, gcol); y += 22; draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY); y += 42 
 
     return pil2cv2(np.array(p))
 
-# ─── 高度な解析演出 (重心・筋肉) ───────────────────────────────────────────
 def estimate_muscle_tension(landmarks, view):
-    """姿勢ランドマークから筋肉の緊張度(0.0-1.0)を部位別に推定"""
     tensions = {}
     lm = landmarks
     if view == 'front':
-        # 正面視：左右の傾きとズレに基づく推定
-        # 頭部・首周り (Head Tilt & Shift)
-        head_a = abs(calc_angle(lm[7], lm[8], 100, 100))
-        head_s = abs(lm[0].x - (lm[11].x + lm[12].x)/2) * 50 # ズレ感度
+        head_a = abs(calc_angle(lm[7], lm[8], 100, 100)); head_s = abs(lm[0].x - (lm[11].x + lm[12].x)/2) * 50
         tensions['neck_stress'] = min(head_a * 0.1 + head_s, 1.0)
-        
-        # 肩 (Shoulder Tilt)
         shldr_a = abs(calc_angle(lm[11], lm[12], 100, 100))
         tensions['trapezius_l'] = min(shldr_a * 0.2, 1.0) if lm[11].y > lm[12].y else 0.1
         tensions['trapezius_r'] = min(shldr_a * 0.2, 1.0) if lm[12].y > lm[11].y else 0.1
-        
-        # 腰背部 (Pelvic Tilt & Shift / Body Midline)
-        pel_a = abs(calc_angle(lm[23], lm[24], 100, 100))
-        pel_s = abs(lm[23].x + lm[24].x - lm[11].x - lm[12].x) * 20
-        tensions['erector_spinae_l'] = min(pel_a * 0.15 + pel_s, 0.9)
-        tensions['erector_spinae_r'] = min(pel_a * 0.15 + pel_s, 0.9)
+        pel_a = abs(calc_angle(lm[23], lm[24], 100, 100)); pel_s = abs(lm[23].x + lm[24].x - lm[11].x - lm[12].x) * 20
+        tensions['erector_spinae_l'] = min(pel_a * 0.15 + pel_s, 0.9); tensions['erector_spinae_r'] = min(pel_a * 0.15 + pel_s, 0.9)
     else:
-        # 側面視：前後ズレに基づく推定 (より鋭敏に)
-        # 首 (FHP)
-        fhp = abs(lm[0].x - lm[11].x) * 50
-        tensions['neck_extensor'] = min(fhp * 0.8, 1.0)
-        
-        # 腰 (Lumbar / Trunk Shift)
-        trunk_s = abs(lm[11].x - lm[23].x) * 50
-        tensions['lumbar_extensor'] = min(trunk_s * 0.7, 0.9)
-        
-        # 大腿部 (Knee alignment)
-        quad_s = abs(lm[23].x - lm[25].x) * 50
-        tensions['quads'] = min(quad_s * 0.5, 0.8)
+        fhp = abs(lm[0].x - lm[11].x) * 50; tensions['neck_extensor'] = min(fhp * 0.8, 1.0)
+        trunk_s = abs(lm[11].x - lm[23].x) * 50; tensions['lumbar_extensor'] = min(trunk_s * 0.7, 0.9)
+        quad_s = abs(lm[23].x - lm[25].x) * 50; tensions['quads'] = min(quad_s * 0.5, 0.8)
     return tensions
 
 def draw_muscle_heatmap(img, landmarks, tensions, w, h, x1, y1, scale):
-    """筋肉の緊張箇所を半透明のヒートマップでオーバーレイ"""
-    overlay = img.copy()
-    lm = landmarks
-    font = get_font(12)
-    
+    overlay = img.copy(); lm = landmarks
     def draw_tension_blob(point_lm, tension, color=(0, 0, 255), label=""):
         if tension < 0.3: return
-        p = px_zoom(point_lm, w, h, x1, y1, scale)
-        radius = int(30 * tension * scale)
-        alpha = int(150 * tension)
-        # ぼかしの効いた円を描画
+        p = px_zoom(point_lm, w, h, x1, y1, scale); radius = int(30 * tension * scale); alpha = int(150 * tension)
         cv2.circle(overlay, p, radius, color, -1)
-        if label:
-            cv2.putText(img, label, (p[0]+15, p[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
-
-    # 部位別の緊張度を可視化
+        if label: cv2.putText(img, label, (p[0]+15, p[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
     for part, t in tensions.items():
-        if t < 0.15: continue # しきい値を下げて、より多くの部位を表示
-        
+        if t < 0.15: continue
         if part.startswith('trapezius'):
-            idx = 11 if '_l' in part else 12
-            draw_tension_blob(lm[idx], t, (0, 100, 255), "Trapezius")
+            idx = 11 if '_l' in part else 12; draw_tension_blob(lm[idx], t, (0, 100, 255), "Trapezius")
         elif part == 'neck_stress' or part == 'neck_extensor':
-            # 首の付け根
             class MidPoint:
-                def __init__(self, x, y):
-                    self.x, self.y, self.visibility = x, y, 1.0
-            mn = MidPoint((lm[7].x+lm[8].x)/2, (lm[7].y+lm[11].y)/2)
-            draw_tension_blob(mn, t, (0, 120, 255), "Neck Stress")
+                def __init__(self, x, y): self.x, self.y, self.visibility = x, y, 1.0
+            mn = MidPoint((lm[7].x+lm[8].x)/2, (lm[7].y+lm[11].y)/2); draw_tension_blob(mn, t, (0, 120, 255), "Neck Stress")
         elif part.startswith('erector_spinae') or part == 'lumbar_extensor':
-            # 背負筋・腰部
-            idx = 23 if '_l' in part else 24
-            draw_tension_blob(lm[idx], t, (0, 80, 220), "Back Stress")
+            idx = 23 if '_l' in part else 24; draw_tension_blob(lm[idx], t, (0, 80, 220), "Back Stress")
         elif part == 'quads':
-            # 大腿部
             class ThighPoint:
-                def __init__(self, x, y):
-                    self.x, self.y, self.visibility = x, y, 1.0
-            mt = ThighPoint((lm[23].x + lm[25].x) / 2, (lm[23].y + lm[25].y) / 2)
-            draw_tension_blob(mt, t, (0, 50, 200), "Thigh Tension")
-
+                def __init__(self, x, y): self.x, self.y, self.visibility = x, y, 1.0
+            mt = ThighPoint((lm[23].x + lm[25].x) / 2, (lm[23].y + lm[25].y) / 2); draw_tension_blob(mt, t, (0, 50, 200), "Thigh Tension")
     cv2.addWeighted(overlay, 0.4, img, 0.6, 0, img)
 
 def draw_cog_indicator(img, lm, w, h, x1, y1, scale, view):
-    """支持基底面に対する重心(COG)位置と左右荷重バランスを表示"""
-    # 両足の中点を計算
-    ankle_l, ankle_r = lm[27], lm[28]
-    base_mid_x = (ankle_l.x + ankle_r.x) / 2
-    
-    # 上半身の簡易重心（鼻、肩、腰の中点）
+    ankle_l, ankle_r = lm[27], lm[28]; base_mid_x = (ankle_l.x + ankle_r.x) / 2
     upper_body_x = (lm[0].x + lm[11].x + lm[12].x + lm[23].x + lm[24].x) / 5
-    
-    # ズレを計算 (-1.0 to 1.0)
-    width = max(abs(ankle_l.x - ankle_r.x), 0.05)
-    shift = (upper_body_x - base_mid_x) / width
-    
-    # 足元座標
-    p_base = midpoint(px_zoom(ankle_l, w, h, x1, y1, scale), px_zoom(ankle_r, w, h, x1, y1, scale))
-    py = p_base[1] + 40
-    
+    width = max(abs(ankle_l.x - ankle_r.x), 0.05); shift = (upper_body_x - base_mid_x) / width
+    p_base = midpoint(px_zoom(ankle_l, w, h, x1, y1, scale), px_zoom(ankle_r, w, h, x1, y1, scale)); py = p_base[1] + 40
     if view == 'front':
-        # 荷重バランスインジケータ（正面）
-        bar_w = 120
-        cv2.rectangle(img, (p_base[0]-bar_w//2, py), (p_base[0]+bar_w//2, py+8), (60,60,60), -1)
-        # 現在の重心点
-        cog_x = int(p_base[0] + (shift * bar_w / 2))
-        cog_x = max(p_base[0]-bar_w//2, min(p_base[0]+bar_w//2, cog_x))
+        bar_w = 120; cv2.rectangle(img, (p_base[0]-bar_w//2, py), (p_base[0]+bar_w//2, py+8), (60,60,60), -1)
+        cog_x = max(p_base[0]-bar_w//2, min(p_base[0]+bar_w//2, int(p_base[0] + (shift * bar_w / 2))))
         cv2.circle(img, (cog_x, py+4), 6, (0, 255, 255), -1)
-        
-        # パーセント表示 (見認性向上のために太字・赤色・縁取りを追加)
-        left_p = 50 - (shift * 50)
-        right_p = 100 - left_p
-        
+        left_p = 50 - (shift * 50); right_p = 100 - left_p
         def put_text_bold(text, pos, color, scale=0.6, thickness=2):
-            # 縁取り（黒）
             cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (10, 10, 10), thickness + 2, cv2.LINE_AA)
-            # 本体
             cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
-
-        # 荷重が大きい方を強調（赤系、小さい方は白系）
         col_l = (80, 80, 255) if left_p > 55 else (240, 240, 240)
         col_r = (80, 80, 255) if right_p > 55 else (240, 240, 240)
-        
-        put_text_bold(f"L:{left_p:.0f}%", (p_base[0]-bar_w//2-75, py+15), col_l)
-        put_text_bold(f"R:{right_p:.0f}%", (p_base[0]+bar_w//2+15, py+15), col_r)
-        
-        # 中央ラベル
+        put_text_bold(f"L:{left_p:.0f}%", (p_base[0]-bar_w//2-75, py+15), col_l); put_text_bold(f"R:{right_p:.0f}%", (p_base[0]+bar_w//2+15, py+15), col_r)
         put_text_bold("LOAD BALANCE", (p_base[0]-65, py+38), (80, 220, 240), 0.45, 1)
     else:
-        # 重心フラグ（側面）
-        direction = "FORWARD" if shift > 0.1 else "BACKWARD" if shift < -0.1 else "IDEAL"
-        color = (80, 80, 255) if direction != "IDEAL" else (80, 220, 140)
-        
-        def put_text_bold_side(text, pos, color, scale=0.6, thickness=2):
-            cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (10, 10, 10), thickness + 2, cv2.LINE_AA)
-            cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
-            
-        put_text_bold_side(f"COG: {direction}", (p_base[0]-60, py+45), color)
+        direction = "FORWARD" if shift > 0.1 else "BACKWARD" if shift < -0.1 else "IDEAL"; color = (80, 80, 255) if direction != "IDEAL" else (80, 220, 140)
+        # 修正: cv2.putText の引数を修正
+        cv2.putText(img, f"COG: {direction}", (p_base[0]-60, py+45), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (10,10,10), 4, cv2.LINE_AA)
+        cv2.putText(img, f"COG: {direction}", (p_base[0]-60, py+45), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
 
 def build_side_panel(items, risks, pw, ih):
-    # スコアリスト作成
     i_scores = [it["score"] for it in items]
     r_scores = [r[1] for r in risks]
     f_risks = calc_future_risks(i_scores + r_scores, view='side')
     total_pt = _calc_total_score(items, risks)
-
     ph = _measure_side_panel_height(items, risks)
     p = Image.new("RGB", (pw, ph), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(15), get_font(14)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 12, "[ AI 姿勢解析：側面観察 ]", fH, WHITE)
-    
-    # ─── 総合スコア表示 ─────
-    y = 65
-    dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150))
-    draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
-    score_col = YELLOW if total_pt > 70 else (255,100,100)
-    draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col)
-    draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
-
-    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38
-    draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
+    y = 65; dr.rectangle([(10,y),(pw-10,y+60)], fill=(32,38,58), outline=(60,80,150)); draw_text(dr, (25, y+18), "あなたの姿勢総合スコア", fS, WHITE)
+    score_col = YELLOW if total_pt > 70 else (255,100,100); draw_text(dr, (pw-120, y+10), str(total_pt), get_font(38), score_col); draw_text(dr, (pw-55, y+25), "/ 100 pt", fS, WHITE)
+    y = 135; dr.rectangle([(10,y),(pw-10,y+20)], fill=(28,42,66), outline=LINE_COL); draw_text(dr, (18,y+4), "側面理想：耳〜足首が一直線", fXS, GREEN_IDEAL); y += 38; draw_text(dr, (18,y), "▌ 計測結果", fH, WHITE); y += 32
     for item in items:
         col = SCORE_RGB[item["score"]]; dr.rectangle([(10,y),(pw-10,y+64)], fill=(34,40,68), outline=LINE_COL)
         draw_text(dr, (18,y+8), item["name"], fB, WHITE); bx = pw-50; dr.ellipse([(bx,y+6),(bx+24,y+30)], fill=col); draw_text(dr, (bx+4,y+10), item["score"], fXS, (10,10,10))
         draw_text(dr, (18,y+36), f"理想: {item['ideal']}", fS, GREEN_IDEAL); draw_text(dr, (138,y+36), f"実測: {item['measured']}", fS, YELLOW); draw_text(dr, (278,y+36), f"偏差: {item['diff']}", fS, col); y += 72
-        
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 部位別リスク予測", fH, WHITE); y += 32; draw_text(dr, (20,y), "※現在の姿勢データから推定される傾向です", fXXS, GRAY); y += 25
     for pt, sc, msg in risks:
-        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8
-        draw_text(dr, (18,y), f"【{pt}】", fS, WHITE)
-        # スコアアイコンの位置調整（右にシフトして重なり防止）と描画品質向上
-        bx = 125
-        dr.ellipse([(bx, y), (bx+22, y+22)], fill=col, outline=(30,30,50), width=1)
-        draw_text(dr, (bx+4, y+2), sc, fXXS, (10,10,10))
-        
+        col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 125; dr.ellipse([(bx, y), (bx+22, y+22)], fill=col, outline=(30,30,50), width=1); draw_text(dr, (bx+4, y+2), sc, fXXS, (10,10,10))
         rem = msg; wrp = []
-        while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
+        while len(rem) > 28: wrp.append(rem[:28]); rem = rem[28:]
         if len(rem) > 0: wrp.append(rem)
-        # 本文の位置もアイコンに合わせてシフト
         for i, t in enumerate(wrp): draw_text(dr, (bx + 40, y + i*16), t, fXXS, col)
         y += 45
-
-    # 🆕 生活習慣病予測セクション（側面：改善されたレイアウト）
-    fr_box_h = 48 + 92 * len(f_risks) + 20
-    y += 18; dr.rectangle([(10,y),(pw-10,y+fr_box_h)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
+    fr_box_h = 48 + 92 * len(f_risks) + 20; y += 18; dr.rectangle([(10,y),(pw-10,y+fr_box_h)], fill=(20,24,40), outline=(255, 80, 80)); y += 18; draw_text(dr, (20,y), ">> 未来の健康リスク：5-10年後予報", get_font(19), (255,100,100)); y += 48
     for fr in f_risks:
-        # 項目の名称を一行目に配置
-        draw_text(dr, (25,y), fr["name"], fB, WHITE)
-        y += 28
-        
-        # ゲージ描画（二行目：左寄せ）
-        bar_x1, bar_x2 = 25, pw - 85
-        dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
-        v_f = float(fr.get("val", 0))
-        gw = int((bar_x2 - bar_x1) * (v_f / 100))
-        gcol = (255, 60, 60) if v_f > 60 else (255, 180, 40)
-        dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol)
-        # パーセンテージ描画（ゲージの右隣）
-        draw_text(dr, (bar_x2 + 10, y - 4), f"{v_f:.0f}%", fS, gcol)
-        y += 22
-        
-        # 三行目：説明文
-        draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY)
-        y += 42 # 次の項目へのマージン
-
+        draw_text(dr, (25,y), fr["name"], fB, WHITE); y += 28; bar_x1, bar_x2 = 25, pw - 85; dr.rectangle([(bar_x1, y), (bar_x2, y + 12)], fill=(40, 40, 60))
+        v_f = float(fr.get("val", 0)); gw = int((bar_x2 - bar_x1) * (v_f / 100)); gcol = (255, 60, 60) if v_f > 60 else (255, 180, 40); dr.rectangle([(bar_x1, y), (bar_x1 + gw, y + 12)], fill=gcol); draw_text(dr, (bar_x2 + 10, y - 4), f"{v_f:.0f}%", fS, gcol); y += 22; draw_text(dr, (25,y), f"● {fr['desc']}", fXXS, GRAY); y += 42
     return pil2cv2(np.array(p))
 
 def build_comparison_panel(it1, it2, risks, pw, ih, mode):
     p = Image.new("RGB", (pw, ih), PANEL_BG); dr = ImageDraw.Draw(p); fT, fH, fB, fS, fXS, fXXS = get_font(28), get_font(22), get_font(19), get_font(16), get_font(14), get_font(13)
     dr.rectangle([(0,0),(pw,50)], fill=(30,40,70)); draw_text_center(dr, pw//2, 8, f"🩺 姿勢変化・改善指標（{mode}）", fT, WHITE)
     y = 65; draw_text(dr, (18,y), "▌ 姿勢データの変化", fH, WHITE); y += 38
-    
     for i, (b, a) in enumerate(zip(it1, it2)):
         dr.rectangle([(10,y),(pw-10,y+78)], fill=(34,40,68), outline=LINE_COL); draw_text(dr, (18,y+8), b["n"], fB, WHITE)
-        # スコア変化
         def draw_sc(xx, yy, sc, label):
             col = SCORE_RGB[sc]; dr.ellipse([(xx,yy),(xx+18,yy+18)], fill=col); draw_text(dr, (xx+3,yy+1), sc, fXXS, (10,10,10)); draw_text(dr, (xx+25,yy+2), label, fXXS, GRAY)
-        draw_sc(pw-140, y+8, b["s"], "前"); draw_sc(pw-60, y+8, a["s"], "後")
-        
-        # 数値比較
-        unit = "°" if "傾き" in b["n"] or "傾" in b["n"] else "%"
+        draw_sc(pw-140, y+8, b["s"], "前"); draw_sc(pw-60, y+8, a["s"], "後"); unit = "°" if "傾き" in b["n"] or "傾" in b["n"] else "%"
         draw_text(dr, (18,y+42), f"Before: {abs(b['v']):.1f}{unit}", fS, GRAY); draw_text(dr, (160,y+42), f"After: {abs(a['v']):.1f}{unit}", fS, YELLOW)
-        
-        # 改善度（矢印）
         diff = abs(b["v"]) - abs(a["v"]); col_diff = (80,255,150) if diff > 0.1 else (255,100,80) if diff < -0.1 else GRAY
-        txt_diff = f"改善: {diff:+.1f}{unit}" if diff > 0.1 else f"変化: {diff:+.1f}{unit}"
-        draw_text(dr, (pw-140, y+42), txt_diff, fS, col_diff)
-        y += 88
-
+        draw_text(dr, (pw-140, y+42), f"改善: {diff:+.1f}{unit}" if diff > 0.1 else f"変化: {diff:+.1f}{unit}", fS, col_diff); y += 88
     y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (18,y), "▌ 専門スタッフの視点", fH, WHITE); y += 22; draw_text(dr, (18,y), "最新の解析データに基づいたリスク評価です", fXXS, GRAY); y += 20
     for pt, sc, msg in risks:
         col = SCORE_RGB[sc]; dr.line([(10,y),(pw-10,y)], fill=LINE_COL); y += 8; draw_text(dr, (18,y), f"【{pt}】", fS, WHITE); bx = 18+70; dr.ellipse([(bx,y-2),(bx+20,y+18)], fill=col); draw_text(dr, (bx+3,y-1), sc, fXXS, (10,10,10))
         rem = msg; wrp = []
-        while len(rem) > MAX_CHARS: wrp.append(rem[:MAX_CHARS]); rem = rem[MAX_CHARS:]
+        while len(rem) > 28: wrp.append(rem[:28]); rem = rem[28:]
         if rem: wrp.append(rem)
         for i, t in enumerate(wrp): draw_text(dr, (18+105, y+i*15), t, fXXS, col)
         y += 40
-    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15
-    draw_text(dr, (pw//2-120, y), "整体院 導 ｜ 技術提携：AI 姿勢解析エンジン", fXXS, GRAY)
-    return pil2cv2(np.array(p))
+    y += 10; dr.line([(10,y),(pw-10,y)], fill=(70,78,120), width=2); y += 15; draw_text(dr, (pw//2-120, y), "整体院 導 ｜ 技術提携：AI 姿勢解析エンジン", fXXS, GRAY)
 
 if __name__ == "__main__":
-    TEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-    MODEL_PATH = os.path.join(TEST_DIR, "pose_landmarker.task")
+    TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+    MODEL_PATH = os.path.join(TEST_DIR, "pose_landmarker_lite.task")
     engine = PoseAnalyzer(MODEL_PATH)
     targets = glob.glob(os.path.join(TEST_DIR, "*.jpg"))
     for t in targets:

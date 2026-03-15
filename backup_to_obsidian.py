@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 # 設定
-BACKUP_TOKEN = "seitai-backup-2026-safe"
+BACKUP_TOKEN = os.environ.get("BACKUP_TOKEN")
 RENDER_URL = f"https://posture-analyzer-clinic.onrender.com/admin/backup?token={BACKUP_TOKEN}"
 # 2026 会員バックアップ先フォルダ（絶対パス）
 BACKUP_DIR = "/Users/ishikawagai/Desktop/整体院導/姿勢AIバックアップ"

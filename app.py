@@ -3,6 +3,7 @@ import sys
 import uuid
 import json
 from datetime import datetime, timedelta
+import urllib.parse
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, redirect, flash
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -13,12 +14,24 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
 import cloudinary
 import cloudinary.uploader
+from dotenv import load_dotenv
+from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
+register_heif_opener()
+
+# .envファイルがあれば読み込む (ローカル開発用)
+load_dotenv()
 
 # 姿勢解析エンジンのインポート
 from pose_analyzer import PoseAnalyzer
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'seitai-michibiki-secret-key-12345')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+if not app.config['SECRET_KEY']:
+    # Render環境で設定し忘れを防ぐための安全策（開発環境ではランダム値で動作させる）
+    app.config['SECRET_KEY'] = 'development-key-fallback-' + uuid.uuid4().hex
+    if not os.environ.get('RENDER'):
+        print("Warning: SECRET_KEY is not set. Using a temporary random key.")
 
 # DB設定: 環境変数 DATABASE_URL があれば使用（RenderのPostgres等）、なければSQLite
 db_url = os.environ.get('DATABASE_URL')
@@ -32,15 +45,15 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # バックアップ用トークンも環境変数から取得
-BACKUP_TOKEN = os.environ.get('BACKUP_TOKEN', 'seitai-backup-2026-safe')
+BACKUP_TOKEN = os.environ.get('BACKUP_TOKEN')
 
 # メール設定 (Gmail SMTP)
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'seitaimichibiki@gmail.com')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '').strip() or None # Renderの環境変数で設定
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', 'seitaimichibiki@gmail.com')
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
 
 # LINE Messaging API 設定
 app.config['LINE_CHANNEL_ACCESS_TOKEN'] = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
@@ -69,6 +82,30 @@ def upload_to_cloudinary(file_path):
         print(f"Cloudinary upload failed: {e}")
         return None
 
+def process_uploaded_image(file, target_path, max_size=2000):
+    """
+    アップロードされた画像を処理する（HEIC変換、EXIF回転、リサイズ）
+    """
+    try:
+        img = Image.open(file)
+        # EXIFに基づいた回転補正
+        img = ImageOps.exif_transpose(img)
+        # RGBに変換（HEICやRGBAを扱うため）
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # リサイズ（メモリ節約と解析安定化のため）
+        w, h = img.size
+        if max(w, h) > max_size:
+            ratio = max_size / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.Resampling.LANCZOS)
+            
+        img.save(target_path, "JPEG", quality=90)
+        return True
+    except Exception as e:
+        print(f"Image processing error: {e}")
+        return False
+
 mail = Mail(app)
 
 # 起動ログ (デバッグ用)
@@ -83,13 +120,24 @@ print(f"-------------------")
 CORS(app)
 @app.errorhandler(404)
 def page_not_found(e):
-    return render_template('error.html', code=404, title="Page Not Found"), 404
+    return render_template('error.html', code=404, title="ページが見つかりません"), 404
 
 @app.errorhandler(500)
-def server_error(e):
-    if request.is_json or request.path.startswith('/api/') or request.path.endswith('/send'):
-        return jsonify({'success': False, 'error': f'Internal Server Error: {str(e)}'}), 500
-    return render_template('error.html', code=500, title="Server Error"), 500
+def handle_500_error(e):
+    import traceback
+    error_details = traceback.format_exc()
+    app.logger.error(f"Server Error: {error_details}")
+    
+    # APIリクエストや解析実行時のエラー（JSONで返す）
+    if request.is_json or request.path.startswith('/api/') or request.path.startswith('/analyze') or request.path.startswith('/compare'):
+        return jsonify({
+            'success': False, 
+            'error': 'システムの処理中にエラーが発生しました。撮影し直すか、時間を置いて再度お試しください。',
+            'details': error_details if app.debug else '管理者にお問い合わせください。'
+        }), 500
+        
+    # 通常のページアクセス時のエラー（HTMLを表示）
+    return render_template('error.html', code=500, title="サーバーエラー"), 500
 
 db = SQLAlchemy(app)
 app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)
@@ -252,16 +300,7 @@ def load_user(user_id):
 # モデル定義後にマイグレーション実行
 init_and_migrate()
 
-@app.errorhandler(500)
-def handle_500_error(e):
-    import traceback
-    error_details = traceback.format_exc()
-    app.logger.error(f"Server Error: {error_details}")
-    return jsonify({
-        'success': False, 
-        'error': f'サーバー内部エラーが発生しました: {str(e)}',
-        'details': error_details if app.debug else '管理者にお問い合わせください。'
-    }), 500
+# 以前のハンドラは削除（統合済みのため）
 
 @app.route('/debug/db')
 @login_required
@@ -802,7 +841,9 @@ def analyze():
     input_path = os.path.join(UPLOAD_FOLDER, f"input_{uid}{ext}")
     output_path = os.path.join(UPLOAD_FOLDER, f"report_{uid}.jpg")
     
-    file.save(input_path)
+    # 画像の処理と保存（HEIC/回転/リサイズ対応）
+    if not process_uploaded_image(file, input_path):
+        return jsonify({'success': False, 'error': '画像の処理に失敗しました。'}), 400
 
     try:
         # 新しいクラスベースの解析実行
@@ -894,8 +935,9 @@ def send_line_report():
         from linebot.models import TextSendMessage
         
         line_bot_api = LineBotApi(token)
-        # レポートURLの構築（本番環境のドメインに合わせて調整が必要な場合あり）
-        report_url = f"{request.host_url}patient/{record.patient_id}"
+        # レポートURLの構築（日本語名対応のためpatient_idをエンコード）
+        encoded_id = urllib.parse.quote(record.patient_id)
+        report_url = f"{request.host_url}patient/{encoded_id}"
         message = f"【整体院 導】姿勢解析レポートが届きました。\n以下のリンクからご確認いただけます：\n{report_url}\n\n※このメッセージには返信できません。"
         
         line_bot_api.push_message(line_user_id, TextSendMessage(text=message))
@@ -1034,7 +1076,10 @@ def patients():
     records = db.session.query(
         AnalysisRecord.patient_id, 
         db.func.max(AnalysisRecord.created_at).label('last_visit')
-    ).filter(AnalysisRecord.patient_id != '').group_by(AnalysisRecord.patient_id).all()
+    ).filter(
+        AnalysisRecord.user_id == current_user.id,
+        AnalysisRecord.patient_id != ''
+    ).group_by(AnalysisRecord.patient_id).all()
     
     # ソート引数
     sort_by = request.args.get('sort', 'name') # 'name', 'visit'
@@ -1055,8 +1100,11 @@ def patients():
 @app.route('/patient/<patient_id>')
 @login_required
 def patient_detail(patient_id):
-    # 特定の顧客の履歴を全件取得（新しい順）
-    records = AnalysisRecord.query.filter_by(patient_id=patient_id).order_by(AnalysisRecord.created_at.desc()).all()
+    # 特定の顧客の履歴を全件取得（自分のデータのみ、新しい順）
+    records = AnalysisRecord.query.filter_by(
+        patient_id=patient_id,
+        user_id=current_user.id
+    ).order_by(AnalysisRecord.created_at.desc()).all()
     if not records:
         flash("顧客データが見つかりませんでした。")
         return redirect(url_for('patients'))
@@ -1067,6 +1115,8 @@ def patient_detail(patient_id):
 @login_required
 def update_memo(record_id):
     record = AnalysisRecord.query.get_or_404(record_id)
+    if record.user_id != current_user.id:
+        return jsonify({'success': False, 'error': '権限がありません。'}), 403
     # 簡易的な所有権チェック（通常は user_id を使いますが、ここでは patient_id を重視）
     memo_text = request.form.get('memo', '')
     record.memo = memo_text
@@ -1077,6 +1127,8 @@ def update_memo(record_id):
 @login_required
 def delete_record(record_id):
     record = AnalysisRecord.query.get_or_404(record_id)
+    if record.user_id != current_user.id:
+        return jsonify({'success': False, 'error': '権限がありません。'}), 403
     patient_id = record.patient_id
     db.session.delete(record)
     db.session.commit()
@@ -1110,7 +1162,9 @@ def compare():
     output_path = os.path.join(UPLOAD_FOLDER, f"report_comp_{uid}.jpg")
     muscle_output_path = os.path.join(UPLOAD_FOLDER, f"muscle_comp_{uid}.jpg")
     
-    file_b.save(path_b); file_a.save(path_a)
+    # 画像の処理と保存（Before/After両方）
+    if not process_uploaded_image(file_b, path_b) or not process_uploaded_image(file_a, path_a):
+        return jsonify({'success': False, 'error': '画像の処理に失敗しました。'}), 400
 
     try:
         res = get_analyzer().analyze_comparison(path_b, path_a, output_path, muscle_output_path, view_type=view_type)

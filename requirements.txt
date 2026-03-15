@@ -28,5 +28,7 @@ packaging==26.0
 python-dateutil==2.9.0.post0
 cffi==2.0.0
 line-bot-sdk>=3.0.0
+python-dotenv==1.0.1
 psycopg2-binary==2.9.10
 cloudinary>=1.36.0
+pillow-heif==0.21.0

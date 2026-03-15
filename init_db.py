@@ -15,9 +15,12 @@ def init_db():
         db.create_all()
         
         # 管理者（導様）アカウントの作成
+        admin_email = os.environ.get('ADMIN_EMAIL', 'seitaimichibiki@gmail.com')
+        admin_password = os.environ.get('ADMIN_PASSWORD', 'gai1124714')
+        
         admin = User(
-            email='seitaimichibiki@gmail.com',
-            password=generate_password_hash('gai1124714', method='pbkdf2:sha256'),
+            email=admin_email,
+            password=generate_password_hash(admin_password, method='pbkdf2:sha256'),
             is_active_member=True,
             is_admin=True
         )
