@@ -202,7 +202,7 @@ class PoseAnalyzer:
         draw_midline_zoom(p_img, lm, w, h, x1, y1, scale)
 
         # 筋肉図
-        m_img = img_final.copy()
+        m_img = img_f.copy()
         tensions = estimate_muscle_tension(lm, 'front', w, h)
         draw_muscle_heatmap(m_img, lm, tensions, w, h, x1, y1, scale)
         draw_cog_indicator(m_img, lm, w, h, x1, y1, scale, 'front')
@@ -241,7 +241,7 @@ class PoseAnalyzer:
         for p in pts: cv2.circle(p_img, p, 7, (200,200,50), -1)
 
         # 筋肉図
-        m_img = img_final.copy()
+        m_img = img_f.copy()
         tensions = estimate_muscle_tension(lm, 'side', w, h)
         draw_muscle_heatmap(m_img, lm, tensions, w, h, x1, y1, scale)
         draw_cog_indicator(m_img, lm, w, h, x1, y1, scale, 'side')

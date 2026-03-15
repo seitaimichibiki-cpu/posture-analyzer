@@ -26,6 +26,7 @@ from flask_limiter.util import get_remote_address
 import pyotp
 import io
 import csv
+import traceback
 
 # .envファイルがあれば読み込む (ローカル開発用)
 load_dotenv()
