@@ -21,6 +21,9 @@ register_heif_opener()
 import re
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import pyotp
+import io
+import csv
 
 # .envファイルがあれば読み込む (ローカル開発用)
 load_dotenv()
@@ -207,13 +210,29 @@ def init_and_migrate():
                         'side_pelvis_angle', 'trunk_pct']:
                 run_sql(f'ALTER TABLE analysis_record ADD COLUMN {col} FLOAT')
 
+            # Userテーブルへの2FAカラム追加
+            run_sql('ALTER TABLE "user" ADD COLUMN otp_secret VARCHAR(32)')
+            run_sql('ALTER TABLE "user" ADD COLUMN otp_code VARCHAR(6)')
+            run_sql('ALTER TABLE "user" ADD COLUMN otp_expiry TIMESTAMP')
+            run_sql('ALTER TABLE "user" ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE')
+
             print("INFO: マイグレーション(SQL実行)完了")
         except Exception as e:
             print(f"WARNING: マイグレーション実行中に想定外のエラーが発生しましたが、起動を継続します: {e}")
 
     print("--- データベースマイグレーション処理終了 ---")
 
-# パスワードポリシー・2FA機能は保留
+# パスワードポリシー・2FA機能
+def is_strong_password(password):
+    if len(password) < 8:
+        return False
+    if not re.search("[a-z]", password):
+        return False
+    if not re.search("[A-Z]", password):
+        return False
+    if not re.search("[0-9]", password):
+        return False
+    return True
 
 # ─── データベース初期化・移行 ──────────────────────────────────────────────────
 class User(UserMixin, db.Model):
@@ -232,6 +251,12 @@ class User(UserMixin, db.Model):
     # ログイン試行制限用
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
+    
+    # 2FA用
+    otp_secret = db.Column(db.String(32), nullable=True)
+    otp_code = db.Column(db.String(6), nullable=True)
+    otp_expiry = db.Column(db.DateTime, nullable=True)
+    is_2fa_enabled = db.Column(db.Boolean, default=False)
 
 class LineUserMapping(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -381,7 +406,27 @@ def login():
                 user.locked_until = None
                 db.session.commit()
                 
-                # 自動ログイン設定
+                # 2FAチェック
+                if user.is_2fa_enabled:
+                    # OTP生成と送信
+                    otp = pyotp.TOTP(user.otp_secret).now()
+                    user.otp_code = otp
+                    user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+                    db.session.commit()
+                    
+                    # メール送信（設定されている場合）
+                    if app.config.get('MAIL_USERNAME'):
+                        try:
+                            msg = Message("【整体院導】認証コードのご案内",
+                                        recipients=[user.email])
+                            msg.body = f"認証コードは {otp} です。有効期限は10分間です。"
+                            mail.send(msg)
+                        except Exception as e:
+                            print(f"Failed to send 2FA email: {e}")
+                    
+                    return jsonify({'success': True, 'requires_2fa': True, 'email': user.email})
+
+                # 通常ログイン
                 remember = request.form.get('remember') == 'true'
                 login_user(user, remember=remember)
                 return jsonify({'success': True, 'redirect': url_for('index')})
@@ -410,6 +455,40 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/verify_otp', methods=['POST'])
+def verify_otp():
+    data = request.json
+    email = data.get('email')
+    otp_code = data.get('otp')
+    remember = data.get('remember') == True
+    
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({'success': False, 'error': 'ユーザーが見つかりません。'}), 404
+    
+    if user.otp_code == otp_code and user.otp_expiry > datetime.utcnow():
+        user.otp_code = None
+        user.otp_expiry = None
+        db.session.commit()
+        login_user(user, remember=remember)
+        return jsonify({'success': True, 'redirect': url_for('index')})
+    else:
+        return jsonify({'success': False, 'error': '認証コードが正しくないか、有効期限が切れています。'}), 401
+
+@app.route('/settings/toggle_2fa', methods=['POST'])
+@login_required
+def toggle_2fa():
+    if not current_user.otp_secret:
+        current_user.otp_secret = pyotp.random_base32()
+    
+    current_user.is_2fa_enabled = not current_user.is_2fa_enabled
+    db.session.commit()
+    return jsonify({
+        'success': True, 
+        'is_2fa_enabled': current_user.is_2fa_enabled,
+        'message': '2段階認証の設定を更新しました。'
+    })
 
 @app.route('/api/user/settings/line', methods=['POST'])
 @login_required
@@ -639,7 +718,8 @@ def admin_register_user():
     if not email or not password:
         return jsonify({'success': False, 'error': 'メールアドレスとパスワードを入力してください。'}), 400
     
-    # パスワード強度チェックは保留（指示により削除）
+    if not is_strong_password(password):
+        return jsonify({'success': False, 'error': 'パスワードが弱すぎます。8文字以上で英大文字・小文字・数字を組み合わせてください。'}), 400
 
     if User.query.filter_by(email=email).first():
         return jsonify({'success': False, 'error': 'このメールアドレスは既に登録されています。'}), 400
